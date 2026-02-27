@@ -40,7 +40,6 @@ class WelcomeDMCog(commands.Cog):
         self.bot = bot
         self.dm_config = load_dm()
 
-
     # ============================
     # COMANDO /dmwelcome
     # ============================
@@ -52,11 +51,7 @@ class WelcomeDMCog(commands.Cog):
     @app_commands.describe(
         estado="Escribe 'on' o 'off'"
     )
-    async def dmwelcome(
-        self,
-        interaction: discord.Interaction,
-        estado: str
-    ):
+    async def dmwelcome(self, interaction: discord.Interaction, estado: str):
 
         if not interaction.user.guild_permissions.manage_guild:
             return await interaction.response.send_message(
@@ -84,114 +79,41 @@ class WelcomeDMCog(commands.Cog):
             ephemeral=True
         )
 
-
-# ============================
-    # EVENTO: on_member_join
-    # ============================
-
-    @commands.Cog.listener()
-    async def on_member_join(self, member: discord.Member):
-
-        guild_id = str(member.guild.id)
-
-        # Si el servidor no tiene configuración, no hacemos nada
-        if guild_id not in self.dm_config["servers"]:
-            return
-
-        server_cfg = self.dm_config["servers"][guild_id]
-
-        # Si la bienvenida DM no está activada, no hacemos nada
-        if not server_cfg.get("enabled", False):
-            return
-
-        # Mensaje DM por defecto
-        mensaje_dm = f"""
-👋 **Hola {member.name}**, bienvenido a **{member.guild.name}**.
-
-Actualmente somos **{member.guild.member_count} miembros** en esta comunidad.
-
-Gracias por unirte a un servidor que utiliza nuestro sistema de seguridad.  
-Disfruta tu estancia y recuerda seguir las normas del servidor.📋
-
-**📌 Servidor de soporte**
-https://discord.gg/u8W4jv7NXx
-
-🤖 **Invita a ModdyBot**
-https://discord.com/oauth2/authorize?client_id=1450924184606740642&permissions=8&integration_type=0&scope=bot
-
-✨ ¡Nos alegra tenerte aquí!
-"""
-
-        # Si el servidor tiene un mensaje personalizado, lo usamos
-        if "mensaje" in server_cfg:
-            mensaje_dm = server_cfg["mensaje"]
-            mensaje_dm = mensaje_dm.replace("{user}", member.name)
-            mensaje_dm = mensaje_dm.replace("{server}", member.guild.name)
-
-        # Enviar DM
-        try:
-            await member.send(mensaje_dm)
-        except:
-            pass
-
-
     # ============================
     # COMANDO /dmprueba
     # ============================
 
     @app_commands.command(
         name="dmprueba",
-        description="Prueba la bienvenida por DM usando el mensaje configurado."
+        description="Prueba el mensaje de bienvenida por DM con tu formato exacto."
     )
     async def dmprueba(self, interaction: discord.Interaction):
 
         guild = interaction.guild
-        guild_id = str(guild.id)
         user = interaction.user
 
-        # Si el servidor no tiene configuración, no hacemos nada
-        if guild_id not in self.dm_config["servers"]:
-            return await interaction.response.send_message(
-                "❌ Este servidor no tiene configuración de bienvenida por DM.",
-                ephemeral=True
-            )
+        descripcion = (
+            f"👋 **Hola {user.name}**, bienvenido a **{guild.name}**.\n\n"
+            f"Actualmente somos **{guild.member_count} miembros** en esta comunidad.\n\n"
+            "Gracias por unirte a un servidor que utiliza nuestro sistema de seguridad.\n"
+            "Disfruta tu estancia y recuerda seguir las normas del servidor.📋\n\n"
+            "**📌 Servidor de soporte**\n"
+            "[Haz clic aquí para entrar](https://discord.gg/u8W4jv7NXx)\n\n"
+            "🤖 **Invita al bot**\n"
+            "[Invitar ModdyBot](https://discord.com/oauth2/authorize?client_id=1450924184606740642&permissions=8&integration_type=0&scope=bot)\n\n"
+            "✨ ¡Nos alegra tenerte aquí!"
+        )
 
-        server_cfg = self.dm_config["servers"][guild_id]
+        embed = discord.Embed(
+            description=descripcion,
+            color=discord.Color.blue()
+        )
 
-        # Si la bienvenida DM no está activada
-        if not server_cfg.get("enabled", False):
-            return await interaction.response.send_message(
-                "❌ La bienvenida por DM está desactivada.",
-                ephemeral=True
-            )
+        if guild.icon:
+            embed.set_thumbnail(url=guild.icon.url)
 
-        # Mensaje DM por defecto
-        mensaje_dm = f"""
-👋 **Hola {user.name}**, bienvenido a **{guild.name}**.
-
-Actualmente somos **{guild.member_count} miembros** en esta comunidad.
-
-Gracias por unirte a un servidor que utiliza nuestro sistema de seguridad.  
-Disfruta tu estancia y recuerda seguir las normas del servidor.📋
-
-**📌 Servidor de soporte**
-https://discord.gg/u8W4jv7NXx
-
-🤖 **Invita a ModdyBot**
-https://discord.com/oauth2/authorize?client_id=1450924184606740642&permissions=8&integration_type=0&scope=bot
-
-✨ ¡Nos alegra tenerte aquí!
-"""
-
-        # Si hay mensaje personalizado
-        if "mensaje" in server_cfg:
-            mensaje_dm = server_cfg["mensaje"]
-            mensaje_dm = mensaje_dm.replace("{user}", user.name)
-            mensaje_dm = mensaje_dm.replace("{server}", guild.name)
-
-        # Intentar enviar DM
         try:
-            await user.send(mensaje_dm)
+            await user.send(embed=embed)
             await interaction.response.send_message(
                 "📨 Te envié el mensaje de bienvenida por DM.",
                 ephemeral=True
@@ -201,6 +123,52 @@ https://discord.com/oauth2/authorize?client_id=1450924184606740642&permissions=8
                 "❌ No pude enviarte el DM. Puede que tengas los mensajes privados desactivados.",
                 ephemeral=True
             )
+
+    # ============================
+    # EVENTO: on_member_join
+    # ============================
+
+    @commands.Cog.listener()
+    async def on_member_join(self, member: discord.Member):
+
+        guild_id = str(member.guild.id)
+
+        if guild_id not in self.dm_config["servers"]:
+            return
+
+        server_cfg = self.dm_config["servers"][guild_id]
+
+        if not server_cfg.get("enabled", False):
+            return
+
+        # ============================
+        # MENSAJE REAL DE BIENVENIDA
+        # ============================
+
+        descripcion = (
+            f"👋 **Hola {member.name}**, bienvenido a **{member.guild.name}**.\n\n"
+            f"Actualmente somos **{member.guild.member_count} miembros** en esta comunidad.\n\n"
+            "Gracias por unirte a un servidor que utiliza nuestro sistema de seguridad.\n"
+            "Disfruta tu estancia y recuerda seguir las normas del servidor.📋\n\n"
+            "**📌 Servidor de soporte**\n"
+            "[Haz clic aquí para entrar](https://discord.gg/u8W4jv7NXx)\n\n"
+            "🤖 **Invita al bot**\n"
+            "[Invitar ModdyBot](https://discord.com/oauth2/authorize?client_id=1450924184606740642&permissions=8&integration_type=0&scope=bot)\n\n"
+            "✨ ¡Nos alegra tenerte aquí!"
+        )
+
+        embed = discord.Embed(
+            description=descripcion,
+            color=discord.Color.blue()
+        )
+
+        if member.guild.icon:
+            embed.set_thumbnail(url=member.guild.icon.url)
+
+        try:
+            await member.send(embed=embed)
+        except:
+            pass
 
 
 # ============================
