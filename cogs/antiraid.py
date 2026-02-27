@@ -4,6 +4,7 @@ from discord import app_commands
 import json
 import os
 import time
+from datetime import datetime, timezone
 
 ANTIRAID_FILE = "antiraid.json"
 
@@ -18,7 +19,7 @@ def load_antiraid():
             "enabled": False,
             "raid_limit": 5,
             "time_window": 10,
-            "new_account_minutes": 10,
+            "min_account_days": 7,   # AHORA EN DÍAS
             "action": "ban"
         }
         with open(ANTIRAID_FILE, "w") as f:
@@ -51,14 +52,14 @@ class AntiRaidCog(commands.Cog):
 
     @app_commands.command(
         name="antiraid",
-        description="Configura el sistema Anti-Raid (Premium)"
+        description="Configura el sistema Anti-Raid"
     )
     @app_commands.describe(
         enabled="Activa o desactiva el Anti-Raid (on/off)",
         action="Acción cuando se detecta un raid: kick / ban / lockdown",
         raid_limit="Usuarios necesarios para detectar raid",
         time_window="Segundos para medir el raid",
-        new_account_minutes="Minutos mínimos de antigüedad de cuenta"
+        min_account_days="Días mínimos de antigüedad de cuenta"
     )
     async def antiraid_config(
         self,
@@ -67,7 +68,7 @@ class AntiRaidCog(commands.Cog):
         action: str = None,
         raid_limit: int = None,
         time_window: int = None,
-        new_account_minutes: int = None
+        min_account_days: int = None
     ):
 
         cambios = []
@@ -106,11 +107,11 @@ class AntiRaidCog(commands.Cog):
             self.antiraid["time_window"] = time_window
             cambios.append(f"⏳ Ventana de tiempo: **{time_window} segundos**")
 
-        # Antigüedad mínima
-        if new_account_minutes:
-            self.antiraid["new_account_minutes"] = new_account_minutes
+        # Antigüedad mínima (DÍAS)
+        if min_account_days:
+            self.antiraid["min_account_days"] = min_account_days
             cambios.append(
-                f"📅 Antigüedad mínima: **{new_account_minutes} minutos**"
+                f"📅 Antigüedad mínima: **{min_account_days} días**"
             )
 
         save_antiraid(self.antiraid)
@@ -126,7 +127,7 @@ class AntiRaidCog(commands.Cog):
         await interaction.response.send_message(mensaje, ephemeral=True)
 
 
-# ============================
+    # ============================
     # EVENTO: on_member_join
     # ============================
 
@@ -135,84 +136,89 @@ class AntiRaidCog(commands.Cog):
 
         now = time.time()
 
+        if not self.antiraid.get("enabled", False):
+            return
+
+        # Obtener canal de logs (opcional)
+        try:
+            from main import logs
+            log_channel_id = logs.get("log_channel")
+            log_channel = member.guild.get_channel(log_channel_id) if log_channel_id else None
+        except:
+            log_channel = None
+
         # ============================
-        # ANTI-RAID ACTIVADO
+        # 1. PROTECCIÓN CUENTAS NUEVAS (EN DÍAS)
         # ============================
 
-        if self.antiraid.get("enabled", False):
+        account_age_days = (datetime.now(timezone.utc) - member.created_at).days
+        min_days = self.antiraid["min_account_days"]
 
-            # Obtener canal de logs
+        if account_age_days < min_days:
             try:
-                from main import logs  # si tu config de logs está en main
-                log_channel_id = logs.get("log_channel")
-                log_channel = member.guild.get_channel(log_channel_id) if log_channel_id else None
+                await member.kick(reason="Cuenta demasiado nueva (Anti-Raid)")
             except:
-                log_channel = None
+                pass
 
-            # 1. PROTECCIÓN CONTRA CUENTAS NUEVAS
-            account_age_minutes = (now - member.created_at.timestamp()) / 60
+            if log_channel:
+                await log_channel.send(
+                    f"⚠️ **Cuenta nueva expulsada automáticamente**\n"
+                    f"👤 Usuario: {member.mention}\n"
+                    f"📅 Antigüedad: **{account_age_days} días** (mínimo {min_days})"
+                )
+            return
 
-            if account_age_minutes < self.antiraid["new_account_minutes"]:
+        # ============================
+        # 2. REGISTRAR ENTRADA PARA DETECTAR RAID
+        # ============================
+
+        self.join_times.append(now)
+
+        # Limpiar entradas antiguas
+        self.join_times[:] = [
+            t for t in self.join_times if now - t <= self.antiraid["time_window"]
+        ]
+
+        # ============================
+        # 3. DETECTAR RAID
+        # ============================
+
+        if len(self.join_times) >= self.antiraid["raid_limit"]:
+
+            accion = self.antiraid["action"]
+
+            # Acción configurada
+            if accion == "ban":
                 try:
-                    await member.kick(reason="Cuenta demasiado nueva (Anti-Raid)")
+                    await member.ban(reason="Raid detectado (Anti-Raid)")
                 except:
                     pass
 
-                if log_channel:
-                    await log_channel.send(
-                        f"⚠️ **Cuenta nueva expulsada automáticamente**\n"
-                        f"👤 Usuario: {member.mention}\n"
-                        f"📅 Antigüedad: {int(account_age_minutes)} minutos"
-                    )
-                return  # No seguir si fue expulsado
+            elif accion == "kick":
+                try:
+                    await member.kick(reason="Raid detectado (Anti-Raid)")
+                except:
+                    pass
 
-            # 2. REGISTRAR ENTRADA PARA DETECTAR RAID
-            self.join_times.append(now)
-
-            # Limpiar entradas antiguas
-            self.join_times[:] = [
-                t for t in self.join_times if now - t <= self.antiraid["time_window"]
-            ]
-
-            # 3. DETECTAR RAID
-            if len(self.join_times) >= self.antiraid["raid_limit"]:
-
-                accion = self.antiraid["action"]
-
-                # ACCIÓN CONFIGURADA POR EL USUARIO
-                if accion == "ban":
+            elif accion == "lockdown":
+                for channel in member.guild.channels:
                     try:
-                        await member.ban(reason="Raid detectado (Anti-Raid Extremo)")
+                        await channel.set_permissions(
+                            member.guild.default_role,
+                            send_messages=False
+                        )
                     except:
                         pass
 
-                elif accion == "kick":
-                    try:
-                        await member.kick(reason="Raid detectado (Anti-Raid Extremo)")
-                    except:
-                        pass
+            # Logs
+            if log_channel:
+                await log_channel.send(
+                    f"🚨 **RAID DETECTADO**\n"
+                    f"👥 Entradas en pocos segundos: **{len(self.join_times)}**\n"
+                    f"🔧 Acción ejecutada: **{accion.upper()}**"
+                )
 
-                # LOCKDOWN AUTOMÁTICO
-                if accion == "lockdown":
-                    for channel in member.guild.channels:
-                        try:
-                            await channel.set_permissions(
-                                member.guild.default_role,
-                                send_messages=False
-                            )
-                        except:
-                            pass
-
-                # LOGS DEL RAID
-                if log_channel:
-                    await log_channel.send(
-                        f"🚨 **RAID DETECTADO**\n"
-                        f"👥 Entradas en pocos segundos: **{len(self.join_times)}**\n"
-                        f"🔧 Acción ejecutada: **{accion.upper()}**\n"
-                        f"🔒 Lockdown activado automáticamente"
-                    )
-
-                return  # No seguir con bienvenida si hubo raid
+            return
 
 
 # ============================
