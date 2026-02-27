@@ -229,32 +229,6 @@ class AntiSpamCog(commands.Cog):
             view.add_item(discord.ui.Button(label="Cambiar acción", style=discord.ButtonStyle.blurple, custom_id="change_action"))
             view.add_item(discord.ui.Button(label="Cambiar tiempo mute", style=discord.ButtonStyle.blurple, custom_id="change_mute_time"))
             view.add_item(discord.ui.Button(label="Modo progresivo", style=discord.ButtonStyle.gray, custom_id="toggle_progressive"))
-            view.add_item(btn_save async def build_panel(self, interaction, page):
-        guild = interaction.guild
-        guild_id = str(guild.id)
-        cfg = self.ensure_guild_config(guild_id)
-        self.user_pages[interaction.user.id] = page
-
-        embed = self.embed_page(page)
-        view = discord.ui.View(timeout=300)
-
-        # Botón cerrar panel
-        view.add_item(discord.ui.Button(label="🔒 Cerrar panel", style=discord.ButtonStyle.red, custom_id="close_panel"))
-
-        # Página 1
-        if page == 1:
-            embed.add_field(name="Estado", value="🟢 Activado" if cfg["enabled"] else "🔴 Desactivado", inline=False)
-            embed.add_field(name="Acción", value=cfg["action"], inline=False)
-            embed.add_field(name="Tiempo de mute", value=f"{cfg['mute_time']}s", inline=False)
-            embed.add_field(name="Modo progresivo", value="Sí" if cfg["progressive"] else "No", inline=False)
-
-            view.add_item(self.select_allowed_roles(guild, guild_id))
-
-            btn_enable, btn_save, _ = self.main_buttons(guild_id, page)
-            view.add_item(btn_enable)
-            view.add_item(discord.ui.Button(label="Cambiar acción", style=discord.ButtonStyle.blurple, custom_id="change_action"))
-            view.add_item(discord.ui.Button(label="Cambiar tiempo mute", style=discord.ButtonStyle.blurple, custom_id="change_mute_time"))
-            view.add_item(discord.ui.Button(label="Modo progresivo", style=discord.ButtonStyle.gray, custom_id="toggle_progressive"))
             view.add_item(btn_save)
 
          # Página 2 — Flood
