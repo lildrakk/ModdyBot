@@ -9,7 +9,7 @@ class Bot(commands.Bot):
         super().__init__(
             command_prefix=";",
             intents=discord.Intents.all()
-)
+        )
 
 
     async def setup_hook(self):
