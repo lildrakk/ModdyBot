@@ -31,4 +31,4 @@ async def on_ready():
 
 
 keep_alive()
-bot.run("DISCORD_BOT_TOKEN")
+bot.run("TOKEN")
