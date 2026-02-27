@@ -8,10 +8,6 @@ import os
 DM_FILE = "dm.json"
 
 
-# ============================
-# JSON LOADER
-# ============================
-
 def load_dm():
     if not os.path.exists(DM_FILE):
         data = {"servers": {}}
@@ -31,25 +27,18 @@ def save_dm(data):
         json.dump(data, f, indent=4)
 
 
-# ============================
-# COG DE BIENVENIDA POR DM
-# ============================
-
 class WelcomeDMCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.dm_config = load_dm()
 
     # ============================
-    # COMANDO /dmwelcome
+    # /dmwelcome
     # ============================
 
     @app_commands.command(
         name="dmwelcome",
         description="Activa o desactiva la bienvenida por DM"
-    )
-    @app_commands.describe(
-        estado="Escribe 'on' o 'off'"
     )
     async def dmwelcome(self, interaction: discord.Interaction, estado: str):
 
@@ -80,12 +69,12 @@ class WelcomeDMCog(commands.Cog):
         )
 
     # ============================
-    # COMANDO /dmprueba
+    # /dmprueba
     # ============================
 
     @app_commands.command(
         name="dmprueba",
-        description="Prueba el mensaje de bienvenida por DM con tu formato exacto."
+        description="Prueba el mensaje de bienvenida por DM."
     )
     async def dmprueba(self, interaction: discord.Interaction):
 
@@ -98,9 +87,9 @@ class WelcomeDMCog(commands.Cog):
             "Gracias por unirte a un servidor que utiliza nuestro sistema de seguridad.\n"
             "Disfruta tu estancia y recuerda seguir las normas del servidor.📋\n\n"
             "**📌 Servidor de soporte**\n"
-            "[Haz clic aquí para entrar](https://discord.gg/u8W4jv7NXx)\n\n"
-            "🤖 **Invita al bot**\n"
-            "[Invitar ModdyBot](https://discord.com/oauth2/authorize?client_id=1450924184606740642&permissions=8&integration_type=0&scope=bot)\n\n"
+            "https://discord.gg/u8W4jv7NXx\n\n"
+            "🤖 **Invita a ModdyBot**\n"
+            "https://discord.com/oauth2/authorize?client_id=1450924184606740642&permissions=8&integration_type=0&scope=bot\n\n"
             "✨ ¡Nos alegra tenerte aquí!"
         )
 
@@ -113,7 +102,7 @@ class WelcomeDMCog(commands.Cog):
             embed.set_thumbnail(url=guild.icon.url)
 
         try:
-            await user.send(embed=embed)
+            await user.send(embed=embed)  # SOLO EL EMBED
             await interaction.response.send_message(
                 "📨 Te envié el mensaje de bienvenida por DM.",
                 ephemeral=True
@@ -125,7 +114,7 @@ class WelcomeDMCog(commands.Cog):
             )
 
     # ============================
-    # EVENTO: on_member_join
+    # Evento real: on_member_join
     # ============================
 
     @commands.Cog.listener()
@@ -141,19 +130,15 @@ class WelcomeDMCog(commands.Cog):
         if not server_cfg.get("enabled", False):
             return
 
-        # ============================
-        # MENSAJE REAL DE BIENVENIDA
-        # ============================
-
         descripcion = (
             f"👋 **Hola {member.name}**, bienvenido a **{member.guild.name}**.\n\n"
             f"Actualmente somos **{member.guild.member_count} miembros** en esta comunidad.\n\n"
             "Gracias por unirte a un servidor que utiliza nuestro sistema de seguridad.\n"
             "Disfruta tu estancia y recuerda seguir las normas del servidor.📋\n\n"
             "**📌 Servidor de soporte**\n"
-            "[Haz clic aquí para entrar](https://discord.gg/u8W4jv7NXx)\n\n"
-            "🤖 **Invita al bot**\n"
-            "[Invitar ModdyBot](https://discord.com/oauth2/authorize?client_id=1450924184606740642&permissions=8&integration_type=0&scope=bot)\n\n"
+            "https://discord.gg/u8W4jv7NXx\n\n"
+            "🤖 **Invita a ModdyBot**\n"
+            "https://discord.com/oauth2/authorize?client_id=1450924184606740642&permissions=8&integration_type=0&scope=bot\n\n"
             "✨ ¡Nos alegra tenerte aquí!"
         )
 
@@ -166,14 +151,10 @@ class WelcomeDMCog(commands.Cog):
             embed.set_thumbnail(url=member.guild.icon.url)
 
         try:
-            await member.send(embed=embed)
+            await member.send(embed=embed)  # SOLO EL EMBED
         except:
             pass
 
-
-# ============================
-# SETUP DEL COG
-# ============================
 
 async def setup(bot):
     await bot.add_cog(WelcomeDMCog(bot))
