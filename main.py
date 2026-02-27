@@ -1,7 +1,6 @@
 import discord
 import os
 from discord.ext import commands
-from keep_alive import keep_alive
 
 class Bot(commands.Bot):
     def __init__(self):
@@ -18,17 +17,23 @@ class Bot(commands.Bot):
                     print(f"✔ Cargado: {filename}")
                 except Exception as e:
                     print(f"❌ Error cargando {filename}: {e}")
+
 bot = Bot()
 
 @bot.event
 async def on_ready():
     print(f"Bot conectado como {bot.user}")
+
     try:
         synced = await bot.tree.sync()
         print(f"Slash commands sincronizados: {len(synced)}")
     except Exception as e:
         print(f"Error al sincronizar comandos: {e}")
 
-keep_alive()
+    # 👉 Flask se inicia SOLO cuando el bot ya está listo
+    from keep_alive import keep_alive
+    keep_alive()
+    print("Flask iniciado después de sincronizar comandos.")
+
 TOKEN = os.getenv("TOKEN")
 bot.run(TOKEN)
