@@ -31,4 +31,5 @@ async def on_ready():
 
 
 keep_alive()
+TOKEN = os.getnv("TOKEN")
 bot.run("TOKEN")
