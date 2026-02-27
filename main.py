@@ -4,7 +4,7 @@ from discord.ext import commands
 from keep_alive import keep_alive
 
 class Bot(commands.Bot):
-    def __init__(self):
+    def __init__(self):
         super().__init__(
             command_prefix=";",
             intents=discord.Intents.all()
