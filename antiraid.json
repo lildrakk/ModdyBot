@@ -1,0 +1,7 @@
+{
+    "enabled": true,
+    "raid_limit": 5,
+    "time_window": 5,
+    "new_account_minutes": 20160,
+    "action": "kick"
+}

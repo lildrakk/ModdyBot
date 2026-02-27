@@ -1,0 +1,19 @@
+{
+    "enabled": true,
+    "whitelist": [
+        "https://discord.gg"
+    ],
+    "allow_discord_invites": true,
+    "allowed_invites": [],
+    "1464575509785612380": {
+        "enabled": true,
+        "allow_discord_invites": false,
+        "allowed_roles": [],
+        "whitelist_users": [],
+        "whitelist_roles": [],
+        "whitelist_domains": [],
+        "allowed_servers": [],
+        "block_shorteners": true,
+        "block_obfuscated": true
+    }
+}

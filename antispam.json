@@ -1,0 +1,31 @@
+{
+    "enabled": false,
+    "max_messages": 5,
+    "interval": 4,
+    "max_caps": 70,
+    "detect_caps": true,
+    "detect_repeat": true,
+    "1464575509785612380": {
+        "enabled": false,
+        "action": "mute",
+        "mute_time": 600,
+        "progressive": false,
+        "allowed_roles": [],
+        "whitelist_users": [],
+        "whitelist_roles": [],
+        "whitelist_channels": [],
+        "flood": {
+            "max_messages": 5,
+            "interval": 4
+        },
+        "caps": {
+            "enabled": true,
+            "max_caps": 70
+        },
+        "repeat": {
+            "enabled": true,
+            "max_repeat": 2
+        },
+        "cooldown": 3
+    }
+}

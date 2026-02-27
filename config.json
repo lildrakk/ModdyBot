@@ -1,0 +1,14 @@
+{
+    "1450617527297380516": {
+        "prefix": ";",
+        "log_channel": "",
+        "antialt_action": "mute",
+        "antialt_days": 7
+    },
+    "1464575509785612380": {
+        "prefix": "!",
+        "log_channel": "",
+        "antialt_action": "mute",
+        "antialt_days": 7
+    }
+}

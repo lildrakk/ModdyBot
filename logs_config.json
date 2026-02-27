@@ -1,0 +1,15 @@
+{
+    "1464575509785612380": {
+        "enabled": true,
+        "channel": 1466472621913669727,
+        "events": {
+            "joins": true,
+            "leaves": true,
+            "bans": true,
+            "unbans": true,
+            "messages_delete": true,
+            "messages_edit": true,
+            "commands": true
+        }
+    }
+}
