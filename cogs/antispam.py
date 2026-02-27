@@ -323,6 +323,7 @@ class AntiSpamCog(commands.Cog):
         # Página 4 — Repetición
         elif page == 4:
             embed.add_field(name="Detectar repetición", value="Sí" if cfg["repeat"]["enabled"] else "No", inline=False)
+            embed.add_field(name="Máx. repeticiones" if cfg["repeat"]["enabled"] else "No", inline=False)
             embed.add_field(name="Máx. repeticiones", value=cfg["repeat"]["max_repeat"], inline=False)
 
             view.add_item(discord.ui.Button(label="Toggle repetición", style=discord.ButtonStyle.gray, custom_id="toggle_repeat"))
@@ -376,7 +377,7 @@ class AntiSpamCog(commands.Cog):
         for btn in self.nav_buttons(page):
             view.add_item(btn)
 
-        # Respuesta segura (evita "la aplicación no ha respondido")
+        # Respuesta segura
         if interaction.response.is_done():
             await interaction.edit_original_response(embed=embed, view=view)
         else:
@@ -399,6 +400,28 @@ class AntiSpamCog(commands.Cog):
         guild_id = str(guild.id)
 
         self.ensure_guild_config(guild_id)
+
+        allowed_roles = self.config[guild_id]["allowed_roles"]
+        if allowed_roles:
+            if not any(role.id in allowed_roles for role in interaction.user.roles):
+                return await interaction.response.send_message(
+                    "❌ No tienes permiso para usar este panel.",
+                    ephemeral=True
+                )
+
+        await self.build_panel(interaction, page=1)
+
+    # ============================
+    # Listener de componentes
+    # ============================
+
+    @commands.Cog.listener()
+    async def on_interaction(self, interaction: discord.Interaction):
+        if interaction.type != discord.InteractionType.component:
+            return
+
+        custom_id = interaction.data.get("custom_id")
+        user_id = interaction_guild_config(guild_id)
 
         allowed_roles = self.config[guild_id]["allowed_roles"]
         if allowed_roles:
@@ -503,6 +526,13 @@ class AntiSpamCog(commands.Cog):
             cfg["progressive"] = not cfg["progressive"]
             save_antispam(self.config)
             return await self.update_panel(interaction, page)
+
+        # Test Anti-Spam
+        if custom_id == "test_antispam":
+            return await interaction.response.send_message(
+                "🧪 Test Anti‑Spam activado.\nEscribe 5 mensajes rápidos para probarlo.",
+                ephemeral=True
+            )
 
         # Selects
         if custom_id == "select_allowed_roles":
