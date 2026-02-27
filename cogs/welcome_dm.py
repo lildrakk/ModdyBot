@@ -71,7 +71,6 @@ class WelcomeDMCog(commands.Cog):
     # ============================
     # /dmprueba
     # ============================
-
     @app_commands.command(
         name="dmprueba",
         description="Prueba el mensaje de bienvenida por DM."
@@ -81,15 +80,19 @@ class WelcomeDMCog(commands.Cog):
         guild = interaction.guild
         user = interaction.user
 
+        # ============================
+        # TEXTO DEL EMBED CON ENLACES MARCADOS
+        # ============================
+
         descripcion = (
             f"👋 **Hola {user.name}**, bienvenido a **{guild.name}**.\n\n"
             f"Actualmente somos **{guild.member_count} miembros** en esta comunidad.\n\n"
             "Gracias por unirte a un servidor que utiliza nuestro sistema de seguridad.\n"
             "Disfruta tu estancia y recuerda seguir las normas del servidor.📋\n\n"
             "**📌 Servidor de soporte**\n"
-            "https://discord.gg/u8W4jv7NXx\n\n"
+            "[Entrar aquí](https://discord.gg/u8W4jv7NXx)\n\n"
             "🤖 **Invita a ModdyBot**\n"
-            "https://discord.com/oauth2/authorize?client_id=1450924184606740642&permissions=8&integration_type=0&scope=bot\n\n"
+            "[Invitar aquí](https://discord.com/oauth2/authorize?client_id=1450924184606740642&permissions=8&integration_type=0&scope=bot)\n\n"
             "✨ ¡Nos alegra tenerte aquí!"
         )
 
@@ -100,6 +103,10 @@ class WelcomeDMCog(commands.Cog):
 
         if guild.icon:
             embed.set_thumbnail(url=guild.icon.url)
+
+        # ============================
+        # ENVIAR DM
+        # ============================
 
         try:
             await user.send(embed=embed)  # SOLO EL EMBED
@@ -112,7 +119,8 @@ class WelcomeDMCog(commands.Cog):
                 "❌ No pude enviarte el DM. Puede que tengas los mensajes privados desactivados.",
                 ephemeral=True
             )
-
+    
+    
     # ============================
     # Evento real: on_member_join
     # ============================
