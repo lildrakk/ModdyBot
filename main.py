@@ -17,7 +17,6 @@ class Bot(commands.Bot):
         for filename in os.listdir("./cogs"):
             if filename.endswith(".py") and filename != "__init__.py":
                 await self.load_extension(f"cogs.{filename[:-3]}")
-
                 print(f"✔ Cargado: {filename}")
 
 
