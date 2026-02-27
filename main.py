@@ -13,10 +13,8 @@ class Bot(commands.Bot):
     async def setup_hook(self):
         # Cargar todos los COGS automáticamente
         for filename in os.listdir("./cogs"):
-
     if filename.endswith(".py") and filename != "__init__.py":
-
-        await bot.load_extension(f"cogs.{filename[:-3]}")
+        await bot.load_extension(f"cogs.{filename[:-3]}")
 
 
                 print(f"✔ Cargado: {filename}")
