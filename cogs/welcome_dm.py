@@ -135,6 +135,74 @@ https://discord.com/oauth2/authorize?client_id=1450924184606740642&permissions=8
             pass
 
 
+    # ============================
+    # COMANDO /dmprueba
+    # ============================
+
+    @app_commands.command(
+        name="dmprueba",
+        description="Prueba la bienvenida por DM usando el mensaje configurado."
+    )
+    async def dmprueba(self, interaction: discord.Interaction):
+
+        guild = interaction.guild
+        guild_id = str(guild.id)
+        user = interaction.user
+
+        # Si el servidor no tiene configuración, no hacemos nada
+        if guild_id not in self.dm_config["servers"]:
+            return await interaction.response.send_message(
+                "❌ Este servidor no tiene configuración de bienvenida por DM.",
+                ephemeral=True
+            )
+
+        server_cfg = self.dm_config["servers"][guild_id]
+
+        # Si la bienvenida DM no está activada
+        if not server_cfg.get("enabled", False):
+            return await interaction.response.send_message(
+                "❌ La bienvenida por DM está desactivada.",
+                ephemeral=True
+            )
+
+        # Mensaje DM por defecto
+        mensaje_dm = f"""
+👋 **Hola {user.name}**, bienvenido a **{guild.name}**.
+
+Actualmente somos **{guild.member_count} miembros** en esta comunidad.
+
+Gracias por unirte a un servidor que utiliza nuestro sistema de seguridad.  
+Disfruta tu estancia y recuerda seguir las normas del servidor.📋
+
+**📌 Servidor de soporte**
+https://discord.gg/u8W4jv7NXx
+
+🤖 **Invita a ModdyBot**
+https://discord.com/oauth2/authorize?client_id=1450924184606740642&permissions=8&integration_type=0&scope=bot
+
+✨ ¡Nos alegra tenerte aquí!
+"""
+
+        # Si hay mensaje personalizado
+        if "mensaje" in server_cfg:
+            mensaje_dm = server_cfg["mensaje"]
+            mensaje_dm = mensaje_dm.replace("{user}", user.name)
+            mensaje_dm = mensaje_dm.replace("{server}", guild.name)
+
+        # Intentar enviar DM
+        try:
+            await user.send(mensaje_dm)
+            await interaction.response.send_message(
+                "📨 Te envié el mensaje de bienvenida por DM.",
+                ephemeral=True
+            )
+        except:
+            await interaction.response.send_message(
+                "❌ No pude enviarte el DM. Puede que tengas los mensajes privados desactivados.",
+                ephemeral=True
+            )
+
+
 # ============================
 # SETUP DEL COG
 # ============================
