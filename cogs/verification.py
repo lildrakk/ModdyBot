@@ -33,7 +33,7 @@ def save_verification(data):
 # ============================
 
 def generar_captcha():
-    letras = string.ascii_letters  # mayúsculas y minúsculas
+    letras = string.ascii_letters
     codigo = ''.join(random.choice(letras) for _ in range(6))
 
     img = Image.new("RGB", (300, 120), "white")
@@ -68,7 +68,7 @@ class VerifyButtonItem(discord.ui.Button):
         self.panel_id = panel_id
 
     async def callback(self, interaction: discord.Interaction):
-        pass  # lo maneja on_interaction
+        pass
 
 
 class VerifyButton(discord.ui.View):
@@ -90,7 +90,7 @@ class CaptchaModal(discord.ui.Modal, title="Verificación con Captcha"):
 
         self.input = discord.ui.TextInput(
             label="Introduce el código del captcha",
-            placeholder="Escribe exactamente lo que ves en la imagen",
+            placeholder="Escribe exactamente lo que ves",
             required=True
         )
         self.add_item(self.input)
@@ -114,7 +114,6 @@ class CaptchaModal(discord.ui.Modal, title="Verificación con Captcha"):
 class VerificationCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.captcha_temp = {}  # user_id: codigo
 
         data = load_verification()
         for guild_id in data:
@@ -138,7 +137,8 @@ class VerificationCog(commands.Cog):
         rol_dar="Rol que se dará al verificar",
         rol_quitar="Rol que se quitará al verificar",
         texto_boton="Texto del botón",
-        texto_captcha="Texto que aparecerá encima del captcha"
+        tipo="normal o captcha",
+        texto_captcha="Texto que aparecerá encima del captcha (si es captcha)"
     )
     async def verificacion_crear(
         self,
@@ -149,9 +149,13 @@ class VerificationCog(commands.Cog):
         descripcion: str,
         rol_dar: discord.Role,
         rol_quitar: discord.Role,
-        texto_boton: str = "Verificar",
+        texto_boton: str,
+        tipo: str,
         texto_captcha: str = "Verifícate por seguridad del servidor"
     ):
+
+        if tipo not in ["normal", "captcha"]:
+            return await interaction.response.send_message("❌ Tipo inválido. Usa: normal o captcha", ephemeral=True)
 
         guild_id = str(interaction.guild.id)
         data = load_verification()
@@ -165,6 +169,7 @@ class VerificationCog(commands.Cog):
             "titulo": titulo,
             "descripcion": descripcion,
             "boton": texto_boton,
+            "tipo": tipo,
             "captcha_texto": texto_captcha
         }
 
@@ -201,68 +206,45 @@ class VerificationCog(commands.Cog):
         data = load_verification()
 
         if guild_id not in data or panel_id not in data[guild_id]:
-            return await interaction.response.send_message(
-                "❌ Panel no encontrado.", ephemeral=True)
+            return await interaction.response.send_message("❌ Panel no encontrado.", ephemeral=True)
 
         cfg = data[guild_id][panel_id]
 
         rol_dar = interaction.guild.get_role(cfg["rol_dar"])
         rol_quitar = interaction.guild.get_role(cfg["rol_quitar"])
+        tipo = cfg["tipo"]
 
         # ============================
-        # MOSTRAR OPCIONES AL USUARIO
+        # VERIFICACIÓN NORMAL
         # ============================
 
-        opciones = discord.ui.Select(
-            placeholder="Elige método de verificación",
-            options=[
-                discord.SelectOption(label="Normal", value="normal"),
-                discord.SelectOption(label="Captcha", value="captcha")
-            ]
+        if tipo == "normal":
+            try:
+                await interaction.user.remove_roles(rol_quitar)
+                await interaction.user.add_roles(rol_dar)
+                return await interaction.response.send_message("✅ Verificación completada.", ephemeral=True)
+            except:
+                return await interaction.response.send_message("❌ No pude asignar los roles.", ephemeral=True)
+
+        # ============================
+        # VERIFICACIÓN CAPTCHA
+        # ============================
+
+        codigo, imagen = generar_captcha()
+
+        embed = discord.Embed(
+            title="🔐 Verificación con Captcha",
+            description=cfg["captcha_texto"],
+            color=discord.Color.blue()
         )
 
-        async def opciones_callback(select_interaction: discord.Interaction):
-            metodo = opciones.values[0]
+        file = discord.File(imagen, filename="captcha.png")
+        embed.set_image(url="attachment://captcha.png")
 
-            if metodo == "normal":
-                try:
-                    await select_interaction.user.remove_roles(rol_quitar)
-                    await select_interaction.user.add_roles(rol_dar)
-                    await select_interaction.response.send_message("✅ Verificación completada.", ephemeral=True)
-                except:
-                    await select_interaction.response.send_message("❌ No pude asignar los roles.", ephemeral=True)
+        await interaction.response.send_message(embed=embed, file=file, ephemeral=True)
 
-            else:
-                codigo, imagen = generar_captcha()
-                self.captcha_temp[select_interaction.user.id] = codigo
-
-                embed = discord.Embed(
-                    title="🔐 Verificación con Captcha",
-                    description=cfg["captcha_texto"],
-                    color=discord.Color.blue()
-                )
-                file = discord.File(imagen, filename="captcha.png")
-                embed.set_image(url="attachment://captcha.png")
-
-                await select_interaction.response.send_message(
-                    embed=embed,
-                    file=file,
-                    ephemeral=True
-                )
-
-                await select_interaction.followup.send_modal(
-                    CaptchaModal(codigo, rol_dar, rol_quitar)
-                )
-
-        opciones.callback = opciones_callback
-
-        view = discord.ui.View()
-        view.add_item(opciones)
-
-        await interaction.response.send_message(
-            "Selecciona un método de verificación:",
-            view=view,
-            ephemeral=True
+        await interaction.followup.send_modal(
+            CaptchaModal(codigo, rol_dar, rol_quitar)
         )
 
 
