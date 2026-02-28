@@ -306,45 +306,50 @@ class AntiLinksCog(commands.Cog):
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
     # ============================
-    # Comando /antilinks
-    # ============================
+# Comando /antilinks
+# ============================
 
-    @app_commands.command(
-        name="antilinks",
-        description="Abre el panel de configuración Anti‑Links"
-    )
-    async def antilinks_cmd(self, interaction: discord.Interaction):
+@app_commands.command(
+    name="antilinks",
+    description="Abre el panel de configuración Anti‑Links"
+)
+async def antilinks_cmd(self, interaction: discord.Interaction):
 
-        guild = interaction.guild
-        guild_id = str(guild.id)
+    guild = interaction.guild
+    guild_id = str(guild.id)
 
-        # Crear config si no existe
-        if guild_id not in self.config:
-            self.config[guild_id] = {
-                "enabled": False,
-                "allow_discord_invites": False,
-                "allowed_roles": [],
-                "whitelist_users": [],
-                "whitelist_roles": [],
-                "whitelist_domains": [],
-                "allowed_servers": [],
-                "block_shorteners": True,
-                "block_obfuscated": True
-            }
-            save_antilinks(self.config)
+    # Crear config si no existe
+    if guild_id not in self.config:
+        self.config[guild_id] = {
+            "enabled": False,
+            "allow_discord_invites": False,
+            "allowed_roles": [],
+            "whitelist_users": [],
+            "whitelist_roles": [],
+            "whitelist_domains": [],
+            "allowed_servers": [],
+            "block_shorteners": True,
+            "block_obfuscated": True
+        }
+        save_antilinks(self.config)
 
-        # Verificar permisos
-        allowed_roles = self.config[guild_id]["allowed_roles"]
+    # Verificar permisos
+    allowed_roles = self.config[guild_id]["allowed_roles"]
 
-        if allowed_roles:
-            if not any(role.id in allowed_roles for role in interaction.user.roles):
-                return await interaction.response.send_message(
-                    "❌ No tienes permiso para usar este comando.",
-                    ephemeral=True
-                )
+    # ✔ Si es administrador → permitir siempre
+    if interaction.user.guild_permissions.administrator:
+        return await self.build_panel(interaction, page=1)
 
-        await self.build_panel(interaction, page=1)
+    # ✔ Si NO es admin → comprobar roles permitidos
+    if allowed_roles:
+        if not any(role.id in allowed_roles for role in interaction.user.roles):
+            return await interaction.response.send_message(
+                "❌ No tienes permiso para usar este comando.",
+                ephemeral=True
+            )
 
+    # ✔ Si pasa las comprobaciones → abrir panel
+    await self.build_panel(interaction, page=1)
     # ============================
     # Listener de componentes
     # ============================
