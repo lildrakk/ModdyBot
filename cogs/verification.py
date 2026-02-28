@@ -10,11 +10,6 @@ import io
 
 VERIFICATION_FILE = "verification.json"
 
-
-# ============================
-# JSON LOADER
-# ============================
-
 def load_verification():
     if not os.path.exists(VERIFICATION_FILE):
         with open(VERIFICATION_FILE, "w") as f:
@@ -22,15 +17,9 @@ def load_verification():
     with open(VERIFICATION_FILE, "r") as f:
         return json.load(f)
 
-
 def save_verification(data):
     with open(VERIFICATION_FILE, "w") as f:
         json.dump(data, f, indent=4)
-
-
-# ============================
-# GENERADOR CAPTCHA
-# ============================
 
 def generar_captcha():
     letras = string.ascii_letters
@@ -51,11 +40,6 @@ def generar_captcha():
     buffer.seek(0)
 
     return codigo, buffer
-
-
-# ============================
-# MODAL CAPTCHA
-# ============================
 
 class CaptchaModal(discord.ui.Modal, title="Verificación con Captcha"):
     def __init__(self, codigo_correcto, rol_dar, rol_quitar):
@@ -82,11 +66,6 @@ class CaptchaModal(discord.ui.Modal, title="Verificación con Captcha"):
         else:
             await interaction.response.send_message("❌ Código incorrecto.", ephemeral=True)
 
-
-# ============================
-# BOTÓN DEL PANEL
-# ============================
-
 class VerifyButtonItem(discord.ui.Button):
     def __init__(self, panel_id, label):
         super().__init__(
@@ -100,16 +79,11 @@ class VerifyButtonItem(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction):
         pass
 
-
 class VerifyButton(discord.ui.View):
     def __init__(self, panel_id, label):
         super().__init__(timeout=None)
         self.add_item(VerifyButtonItem(panel_id, label))
 
-
-# ============================
-# COG PRINCIPAL
-# ============================
 
 class VerificationCog(commands.Cog):
     def __init__(self, bot):
@@ -119,10 +93,6 @@ class VerificationCog(commands.Cog):
         for guild_id in data:
             for panel_id, cfg in data[guild_id].items():
                 bot.add_view(VerifyButton(panel_id, cfg["boton"]))
-
-    # ============================
-    # COMANDO PARA CREAR PANEL
-    # ============================
 
     @app_commands.command(
         name="verificacion_crear",
@@ -185,10 +155,6 @@ class VerificationCog(commands.Cog):
         await canal.send(embed=embed, view=view)
         await interaction.response.send_message("✅ Panel creado.", ephemeral=True)
 
-    # ============================
-    # ON INTERACTION
-    # ============================
-
     @commands.Cog.listener()
     async def on_interaction(self, interaction: discord.Interaction):
 
@@ -213,10 +179,6 @@ class VerificationCog(commands.Cog):
         rol_quitar = interaction.guild.get_role(cfg["rol_quitar"])
         tipo = cfg["tipo"]
 
-        # ============================
-        # VERIFICACIÓN NORMAL
-        # ============================
-
         if tipo == "normal":
             try:
                 await interaction.user.remove_roles(rol_quitar)
@@ -224,10 +186,6 @@ class VerificationCog(commands.Cog):
                 return await interaction.response.send_message("✅ Verificación completada.", ephemeral=True)
             except:
                 return await interaction.response.send_message("❌ No pude asignar los roles.", ephemeral=True)
-
-        # ============================
-        # VERIFICACIÓN CAPTCHA
-        # ============================
 
         codigo, imagen = generar_captcha()
 
@@ -240,19 +198,15 @@ class VerificationCog(commands.Cog):
         file = discord.File(imagen, filename="captcha.png")
         embed.set_image(url="attachment://captcha.png")
 
-        # MENÚ EPHEMERAL
         select = discord.ui.Select(
             placeholder="Selecciona una opción",
-            options=[
-                discord.SelectOption(label="Responder", value="responder")
-            ]
+            options=[discord.SelectOption(label="Responder", value="responder")]
         )
 
         async def select_callback(select_interaction: discord.Interaction):
             if select_interaction.user.id != interaction.user.id:
                 return await select_interaction.response.send_message("❌ No puedes usar este menú.", ephemeral=True)
 
-            # BOTÓN RESPONDER
             responder_btn = discord.ui.Button(
                 label="Responder",
                 style=discord.ButtonStyle.primary
@@ -288,7 +242,6 @@ class VerificationCog(commands.Cog):
             view=view,
             ephemeral=True
         )
-
 
 async def setup(bot):
     await bot.add_cog(VerificationCog(bot))
