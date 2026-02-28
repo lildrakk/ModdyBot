@@ -92,7 +92,8 @@ class VerificationCog(commands.Cog):
         data = load_verification()
         for guild_id in data:
             for panel_id, cfg in data[guild_id].items():
-                bot.add_view(VerifyButton(panel_id, cfg["boton"]))
+                label = cfg.get("boton", "Verificar")
+                bot.add_view(VerifyButton(panel_id, label))
 
     @app_commands.command(
         name="verificacion_crear",
@@ -155,6 +156,41 @@ class VerificationCog(commands.Cog):
         await canal.send(embed=embed, view=view)
         await interaction.response.send_message("✅ Panel creado.", ephemeral=True)
 
+    @app_commands.command(
+        name="verificacion_enviar",
+        description="Enviar un panel de verificación ya existente"
+    )
+    @app_commands.describe(
+        panel_id="ID del panel ya creado",
+        canal="Canal donde se enviará el panel"
+    )
+    async def verificacion_enviar(
+        self,
+        interaction: discord.Interaction,
+        panel_id: str,
+        canal: discord.TextChannel
+    ):
+
+        guild_id = str(interaction.guild.id)
+        data = load_verification()
+
+        if guild_id not in data or panel_id not in data[guild_id]:
+            return await interaction.response.send_message("❌ Ese panel no existe.", ephemeral=True)
+
+        cfg = data[guild_id][panel_id]
+
+        embed = discord.Embed(
+            title=cfg["titulo"],
+            description=cfg["descripcion"],
+            color=discord.Color.green()
+        )
+
+        boton = cfg.get("boton", "Verificar")
+        view = VerifyButton(panel_id, boton)
+
+        await canal.send(embed=embed, view=view)
+        await interaction.response.send_message("✅ Panel enviado correctamente.", ephemeral=True)
+
     @commands.Cog.listener()
     async def on_interaction(self, interaction: discord.Interaction):
 
@@ -178,6 +214,10 @@ class VerificationCog(commands.Cog):
         rol_dar = interaction.guild.get_role(cfg["rol_dar"])
         rol_quitar = interaction.guild.get_role(cfg["rol_quitar"])
         tipo = cfg["tipo"]
+
+        # Si ya está verificado
+        if rol_dar in interaction.user.roles:
+            return await interaction.response.send_message("✅ Ya estás verificado.", ephemeral=True)
 
         if tipo == "normal":
             try:
