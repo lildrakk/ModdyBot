@@ -71,7 +71,7 @@ class VerifyButtonItem(discord.ui.Button):
         super().__init__(
             label=label,
             emoji="🔐",
-            style=discord.ButtonStyle.primary,
+            style=discord.ButtonStyle.success,
             custom_id=f"verify_{panel_id}"
         )
         self.panel_id = panel_id
