@@ -8,7 +8,6 @@ from datetime import datetime, timezone
 
 ANTIRAID_FILE = "antiraid.json"
 
-
 # ============================
 # JSON LOADER
 # ============================
@@ -19,7 +18,7 @@ def load_antiraid():
             "enabled": False,
             "raid_limit": 5,
             "time_window": 10,
-            "min_account_days": 7,   # AHORA EN DÍAS
+            "min_account_days": 7,
             "action": "ban"
         }
         with open(ANTIRAID_FILE, "w") as f:
@@ -29,11 +28,9 @@ def load_antiraid():
     with open(ANTIRAID_FILE, "r") as f:
         return json.load(f)
 
-
 def save_antiraid(data):
     with open(ANTIRAID_FILE, "w") as f:
         json.dump(data, f, indent=4)
-
 
 # ============================
 # COG ANTI-RAID
@@ -45,106 +42,91 @@ class AntiRaidCog(commands.Cog):
         self.antiraid = load_antiraid()
         self.join_times = []
 
-
     # ============================
-# COMANDO /antiraid
-# ============================
-
-@app_commands.command(
-    name="antiraid",
-    description="Configura el sistema Anti-Raid"
-)
-@app_commands.describe(
-    enabled="Activa o desactiva el Anti-Raid (on/off)",
-    action="Acción cuando se detecta un raid: kick / ban / lockdown",
-    raid_limit="Usuarios necesarios para detectar raid",
-    time_window="Segundos para medir el raid",
-    min_account_days="Días mínimos de antigüedad de cuenta"
-)
-async def antiraid_config(
-    self,
-    interaction: discord.Interaction,
-    enabled: str = None,
-    action: str = None,
-    raid_limit: int = None,
-    time_window: int = None,
-    min_account_days: int = None
-):
-
-    # ============================
-    # ✔ Comprobación de permisos
+    # /antiraid
     # ============================
 
-    # Si es administrador → permitir siempre
-    if interaction.user.guild_permissions.administrator:
-        pass
+    @app_commands.command(
+        name="antiraid",
+        description="Configura el sistema Anti-Raid"
+    )
+    @app_commands.describe(
+        enabled="Activa o desactiva el Anti-Raid (on/off)",
+        action="Acción cuando se detecta un raid: kick / ban / lockdown",
+        raid_limit="Usuarios necesarios para detectar raid",
+        time_window="Segundos para medir el raid",
+        min_account_days="Días mínimos de antigüedad de cuenta"
+    )
+    async def antiraid_config(
+        self,
+        interaction: discord.Interaction,
+        enabled: str = None,
+        action: str = None,
+        raid_limit: int = None,
+        time_window: int = None,
+        min_account_days: int = None
+    ):
 
-    # Si NO es admin → debe tener manage_guild
-    elif not interaction.user.guild_permissions.manage_guild:
-        return await interaction.response.send_message(
-            "❌ No tienes permiso para usar este comando.",
-            ephemeral=True
-        )
-
-    # ============================
-    # Lógica del comando
-    # ============================
-
-    cambios = []
-
-    # Activar / desactivar
-    if enabled:
-        enabled = enabled.lower()
-        if enabled in ["on", "off"]:
-            self.antiraid["enabled"] = (enabled == "on")
-            cambios.append(f"🟢 Anti-Raid: **{enabled.upper()}**")
-        else:
+        # Permisos
+        if interaction.user.guild_permissions.administrator:
+            pass
+        elif not interaction.user.guild_permissions.manage_guild:
             return await interaction.response.send_message(
-                "❌ Usa: on / off",
+                "❌ No tienes permiso para usar este comando.",
                 ephemeral=True
             )
 
-    # Acción
-    if action:
-        action = action.lower()
-        if action in ["kick", "ban", "lockdown"]:
-            self.antiraid["action"] = action
-            cambios.append(f"⚙️ Acción: **{action.upper()}**")
-        else:
+        cambios = []
+
+        # Activar / desactivar
+        if enabled:
+            enabled = enabled.lower()
+            if enabled in ["on", "off"]:
+                self.antiraid["enabled"] = (enabled == "on")
+                cambios.append(f"🟢 Anti-Raid: **{enabled.upper()}**")
+            else:
+                return await interaction.response.send_message(
+                    "❌ Usa: on / off",
+                    ephemeral=True
+                )
+
+        # Acción
+        if action:
+            action = action.lower()
+            if action in ["kick", "ban", "lockdown"]:
+                self.antiraid["action"] = action
+                cambios.append(f"⚙️ Acción: **{action.upper()}**")
+            else:
+                return await interaction.response.send_message(
+                    "❌ Acciones válidas: kick / ban / lockdown",
+                    ephemeral=True
+                )
+
+        # Límite de raid
+        if raid_limit:
+            self.antiraid["raid_limit"] = raid_limit
+            cambios.append(f"👥 Límite de raid: **{raid_limit} usuarios**")
+
+        # Ventana de tiempo
+        if time_window:
+            self.antiraid["time_window"] = time_window
+            cambios.append(f"⏳ Ventana de tiempo: **{time_window} segundos**")
+
+        # Antigüedad mínima
+        if min_account_days:
+            self.antiraid["min_account_days"] = min_account_days
+            cambios.append(f"📅 Antigüedad mínima: **{min_account_days} días**")
+
+        save_antiraid(self.antiraid)
+
+        if not cambios:
             return await interaction.response.send_message(
-                "❌ Acciones válidas: kick / ban / lockdown",
+                "ℹ️ No se ha cambiado nada. Usa las opciones del comando.",
                 ephemeral=True
             )
 
-    # Límite de raid
-    if raid_limit:
-        self.antiraid["raid_limit"] = raid_limit
-        cambios.append(f"👥 Límite de raid: **{raid_limit} usuarios**")
-
-    # Ventana de tiempo
-    if time_window:
-        self.antiraid["time_window"] = time_window
-        cambios.append(f"⏳ Ventana de tiempo: **{time_window} segundos**")
-
-    # Antigüedad mínima (DÍAS)
-    if min_account_days:
-        self.antiraid["min_account_days"] = min_account_days
-        cambios.append(
-            f"📅 Antigüedad mínima: **{min_account_days} días**"
-        )
-
-    save_antiraid(self.antiraid)
-
-    if not cambios:
-        return await interaction.response.send_message(
-            "ℹ️ No se ha cambiado nada. Usa las opciones del comando.",
-            ephemeral=True
-        )
-
-    mensaje = "🛡️ **Anti-Raid actualizado:**\n" + "\n".join(cambios)
-
-    await interaction.response.send_message(mensaje, ephemeral=True) 
-
+        mensaje = "🛡️ **Anti-Raid actualizado:**\n" + "\n".join(cambios)
+        await interaction.response.send_message(mensaje, ephemeral=True)
 
     # ============================
     # EVENTO: on_member_join
@@ -158,7 +140,7 @@ async def antiraid_config(
         if not self.antiraid.get("enabled", False):
             return
 
-        # Obtener canal de logs (opcional)
+        # Logs opcionales
         try:
             from main import logs
             log_channel_id = logs.get("log_channel")
@@ -166,10 +148,7 @@ async def antiraid_config(
         except:
             log_channel = None
 
-        # ============================
-        # 1. PROTECCIÓN CUENTAS NUEVAS (EN DÍAS)
-        # ============================
-
+        # 1. Protección cuentas nuevas
         account_age_days = (datetime.now(timezone.utc) - member.created_at).days
         min_days = self.antiraid["min_account_days"]
 
@@ -187,26 +166,17 @@ async def antiraid_config(
                 )
             return
 
-        # ============================
-        # 2. REGISTRAR ENTRADA PARA DETECTAR RAID
-        # ============================
-
+        # 2. Registrar entrada
         self.join_times.append(now)
-
-        # Limpiar entradas antiguas
         self.join_times[:] = [
             t for t in self.join_times if now - t <= self.antiraid["time_window"]
         ]
 
-        # ============================
-        # 3. DETECTAR RAID
-        # ============================
-
+        # 3. Detectar raid
         if len(self.join_times) >= self.antiraid["raid_limit"]:
 
             accion = self.antiraid["action"]
 
-            # Acción configurada
             if accion == "ban":
                 try:
                     await member.ban(reason="Raid detectado (Anti-Raid)")
@@ -229,16 +199,12 @@ async def antiraid_config(
                     except:
                         pass
 
-            # Logs
             if log_channel:
                 await log_channel.send(
                     f"🚨 **RAID DETECTADO**\n"
                     f"👥 Entradas en pocos segundos: **{len(self.join_times)}**\n"
                     f"🔧 Acción ejecutada: **{accion.upper()}**"
                 )
-
-            return
-
 
 # ============================
 # SETUP DEL COG
