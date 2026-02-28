@@ -162,7 +162,9 @@ class AntiSpamCog(commands.Cog):
             custom_id="select_whitelist_channels"
         )
 
-    # ============================
+
+
+# ============================
     # BOTONES
     # ============================
 
@@ -231,7 +233,7 @@ class AntiSpamCog(commands.Cog):
             view.add_item(discord.ui.Button(label="Modo progresivo", style=discord.ButtonStyle.gray, custom_id="toggle_progressive"))
             view.add_item(btn_save)
 
-         # Página 2 — Flood
+        # Página 2 — Flood
         elif page == 2:
             embed.add_field(name="Máx. mensajes", value=str(cfg["flood"]["max_messages"]), inline=False)
             embed.add_field(name="Intervalo (s)", value=str(cfg["flood"]["interval"]), inline=False)
@@ -271,17 +273,17 @@ class AntiSpamCog(commands.Cog):
         elif page == 5:
             embed.add_field(
                 name="Usuarios permitidos",
-                value=", ".join([f"<@{u}>" for u in cfg["whitelist_users"]]) or "Ninguno",
+                value=", ".join([f"<@{u}>" for u in cfg['whitelist_users']]) or "Ninguno",
                 inline=False
             )
             embed.add_field(
                 name="Roles permitidos",
-                value=", ".join([f"<@&{r}>" for r in cfg["whitelist_roles"]]) or "Ninguno",
+                value=", ".join([f"<@&{r}>" for r in cfg['whitelist_roles']]) or "Ninguno",
                 inline=False
             )
             embed.add_field(
                 name="Canales permitidos",
-                value=", ".join([f"<#{c}>" for c in cfg["whitelist_channels"]]) or "Ninguno",
+                value=", ".join([f"<#{c}>" for c in cfg['whitelist_channels']]) or "Ninguno",
                 inline=False
             )
 
@@ -337,58 +339,46 @@ class AntiSpamCog(commands.Cog):
         await self.build_panel(interaction, page)
 
     # ============================
-# SLASH COMMAND
-# ============================
-
-@app_commands.command(
-    name="antispam",
-    description="Abrir panel de configuración Anti‑Spam"
-)
-async def antispam_cmd(self, interaction: discord.Interaction):
-
-    guild = interaction.guild
-    guild_id = str(guild.id)
-    cfg = self.ensure_guild_config(guild_id)
-
-    # ============================
-    # ✔ Comprobación de permisos
+    # SLASH COMMAND
     # ============================
 
-    # Si es administrador → acceso total
-    if interaction.user.guild_permissions.administrator:
-        pass
+    @app_commands.command(
+        name="antispam",
+        description="Abrir panel de configuración Anti‑Spam"
+    )
+    async def antispam_cmd(self, interaction: discord.Interaction):
 
-    # Si NO es admin → debe tener manage_guild
-    elif not interaction.user.guild_permissions.manage_guild:
-        return await interaction.response.send_message(
-            "❌ No tienes permiso para usar este comando.",
+        guild = interaction.guild
+        guild_id = str(guild.id)
+        cfg = self.ensure_guild_config(guild_id)
+
+        # Permisos
+        if interaction.user.guild_permissions.administrator:
+            pass
+        elif not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message(
+                "❌ No tienes permiso para usar este comando.",
+                ephemeral=True
+            )
+        elif cfg["allowed_roles"]:
+            if not any(r.id in cfg["allowed_roles"] for r in interaction.user.roles):
+                return await interaction.response.send_message(
+                    "❌ No tienes permisos para usar este panel.",
+                    ephemeral=True
+                )
+
+        await interaction.response.send_message(
+            "✅ Panel Anti‑Spam abierto en este canal.",
             ephemeral=True
         )
 
-    # Si NO es admin y NO tiene manage_guild → comprobar roles permitidos
-    elif cfg["allowed_roles"]:
-        if not any(r.id in cfg["allowed_roles"] for r in interaction.user.roles):
-            return await interaction.response.send_message(
-                "❌ No tienes permisos para usar este panel.",
-                ephemeral=True
-            )
+        self.panel_owner[guild_id] = interaction.user.id
+        self.user_pages[interaction.user.id] = 1
+        await self.build_panel(interaction, 1)
 
-    # ============================
-    # Abrir panel
-    # ============================
 
-    await interaction.response.send_message(
-        "✅ Panel Anti‑Spam abierto en este canal.",
-        ephemeral=True
-    )
 
-    self.panel_owner[guild_id] = interaction.user.id
-    self.user_pages[interaction.user.id] = 1
-    await self.build_panel(interaction, 1)
-
-        
-
-    # ============================
+# ============================
     # INTERACCIONES
     # ============================
 
