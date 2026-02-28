@@ -4,9 +4,7 @@ from discord import app_commands
 import json
 import os
 
-
 ANTIMENTION_FILE = "antimention.json"
-
 
 # ============================
 # JSON LOADER
@@ -24,11 +22,9 @@ def load_antimention():
         except:
             return {}
 
-
 def save_antimention(data):
     with open(ANTIMENTION_FILE, "w") as f:
         json.dump(data, f, indent=4)
-
 
 # ============================
 # COG ANTI-MENTION
@@ -39,65 +35,55 @@ class AntiMentionCog(commands.Cog):
         self.bot = bot
         self.config = load_antimention()
 
-
     # ============================
-# /antimention
-# ============================
-
-@app_commands.command(
-    name="antimention",
-    description="Activa o desactiva el sistema anti-mentions"
-)
-@app_commands.describe(estado="on/off")
-async def antimention_cmd(self, interaction: discord.Interaction, estado: str):
-
-    guild_id = str(interaction.guild.id)
-
-    # Crear config si no existe
-    if guild_id not in self.config:
-        self.config[guild_id] = {"enabled": False}
-
-    # ============================
-    # ✔ Comprobación de permisos
+    # /antimention
     # ============================
 
-    # Si es administrador → permitir siempre
-    if interaction.user.guild_permissions.administrator:
-        pass
-
-    # Si NO es admin → comprobar si tiene manage_messages
-    elif not interaction.user.guild_permissions.manage_messages:
-        return await interaction.response.send_message(
-            "❌ No tienes permiso para usar este comando.",
-            ephemeral=True
-        )
-
-    # ============================
-    # Lógica del comando
-    # ============================
-
-    if estado.lower() == "on":
-        self.config[guild_id]["enabled"] = True
-        save_antimention(self.config)
-        return await interaction.response.send_message(
-            "📣 Anti‑mention **activado** en este servidor.",
-            ephemeral=True
-        )
-
-    elif estado.lower() == "off":
-        self.config[guild_id]["enabled"] = False
-        save_antimention(self.config)
-        return await interaction.response.send_message(
-            "📣 Anti‑mention **desactivado**.",
-            ephemeral=True
-        )
-
-    else:
-        return await interaction.response.send_message(
-            "❌ Usa: `on` o `off`.",
-            ephemeral=True
+    @app_commands.command(
+        name="antimention",
+        description="Activa o desactiva el sistema anti-mentions"
     )
+    @app_commands.describe(estado="on/off")
+    async def antimention_cmd(self, interaction: discord.Interaction, estado: str):
 
+        guild_id = str(interaction.guild.id)
+
+        # Crear config si no existe
+        if guild_id not in self.config:
+            self.config[guild_id] = {"enabled": False}
+
+        # Permisos
+        if interaction.user.guild_permissions.administrator:
+            pass
+        elif not interaction.user.guild_permissions.manage_messages:
+            return await interaction.response.send_message(
+                "❌ No tienes permiso para usar este comando.",
+                ephemeral=True
+            )
+
+        estado = estado.lower()
+
+        if estado == "on":
+            self.config[guild_id]["enabled"] = True
+            save_antimention(self.config)
+            return await interaction.response.send_message(
+                "📣 Anti‑mention **activado** en este servidor.",
+                ephemeral=True
+            )
+
+        elif estado == "off":
+            self.config[guild_id]["enabled"] = False
+            save_antimention(self.config)
+            return await interaction.response.send_message(
+                "📣 Anti‑mention **desactivado**.",
+                ephemeral=True
+            )
+
+        else:
+            return await interaction.response.send_message(
+                "❌ Usa: `on` o `off`.",
+                ephemeral=True
+            )
 
     # ============================
     # EVENTO: DETECCIÓN DE MENCIONES
@@ -121,21 +107,17 @@ async def antimention_cmd(self, interaction: discord.Interaction, estado: str):
         if not message.mentions and not message.role_mentions:
             return
 
-        # ============================
-        # DETECTAR SPAM DE MENCIONES
-        # ============================
-
-        # Contar menciones a cada usuario
+        # Contar menciones a usuarios
         user_counts = {}
         for user in message.mentions:
             user_counts[user.id] = user_counts.get(user.id, 0) + 1
 
-        # Contar menciones a cada rol
+        # Contar menciones a roles
         role_counts = {}
         for role in message.role_mentions:
             role_counts[role.id] = role_counts.get(role.id, 0) + 1
 
-        # Si un usuario o rol fue mencionado 3+ veces → borrar
+        # Si un usuario fue mencionado 3+ veces
         for uid, count in user_counts.items():
             if count >= 3:
                 await message.delete()
@@ -144,6 +126,7 @@ async def antimention_cmd(self, interaction: discord.Interaction, estado: str):
                     delete_after=5
                 )
 
+        # Si un rol fue mencionado 3+ veces
         for rid, count in role_counts.items():
             if count >= 3:
                 await message.delete()
@@ -151,7 +134,6 @@ async def antimention_cmd(self, interaction: discord.Interaction, estado: str):
                     f"{message.author.mention} 🚫 No puedes mencionar **3 veces** al mismo rol.",
                     delete_after=5
                 )
-
 
 # ============================
 # SETUP DEL COG
