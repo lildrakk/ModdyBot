@@ -6,7 +6,6 @@ import json
 import asyncio
 from datetime import datetime
 
-
 # ============================
 # JSON LOADERS
 # ============================
@@ -47,57 +46,42 @@ class BackupsCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-
     # ============================
-# BACKUP CREAR
-# ============================
-
-@app_commands.command(
-    name="backup_crear",
-    description="Crea un backup del servidor"
-)
-async def backup_crear(self, interaction: discord.Interaction):
-
-    guild = interaction.guild
-    user = interaction.user
-    user_id = user.id
-
-    # ============================
-    # ✔ Comprobación de permisos
+    # BACKUP CREAR
     # ============================
 
-    # Si es administrador → permitir siempre
-    if user.guild_permissions.administrator:
-        pass
+    @app_commands.command(
+        name="backup_crear",
+        description="Crea un backup del servidor"
+    )
+    async def backup_crear(self, interaction: discord.Interaction):
 
-    # Si NO es admin → debe tener manage_guild
-    elif not user.guild_permissions.manage_guild:
-        return await interaction.response.send_message(
-            "❌ No tienes permiso para crear backups del servidor.",
+        guild = interaction.guild
+        user = interaction.user
+        user_id = user.id
+
+        # Permisos
+        if not (user.guild_permissions.administrator or user.guild_permissions.manage_guild):
+            return await interaction.response.send_message(
+                "❌ No tienes permiso para crear backups del servidor.",
+                ephemeral=True
+            )
+
+        await interaction.response.send_message(
+            "📦 Creando backup ordenado...",
             ephemeral=True
         )
 
-    # ============================
-    # Crear backup
-    # ============================
+        try:
+            data = load_backups(user_id)
+            backup_id = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
-    await interaction.response.send_message(
-        "📦 Creando backup ordenado...",
-        ephemeral=True
-    )
+            backup = {
+                "id": backup_id,
+                "roles": [],
+                "channels": []
+            }
 
-    try:
-        data = load_backups(user_id)
-
-        backup_id = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-
-        backup = {
-            "id": backup_id,
-            "roles": [],
-            "channels": []
-        }
-
-        
             # -----------------------------
             # GUARDAR ROLES
             # -----------------------------
@@ -172,6 +156,7 @@ async def backup_crear(self, interaction: discord.Interaction):
             )
 
         except Exception as e:
+            print(f"Error en backup_crear: {e}")
             await interaction.followup.send(
                 "❌ **Hubo un error al crear el backup.**\n"
                 "🔁 Inténtalo de nuevo.\n"
@@ -179,34 +164,30 @@ async def backup_crear(self, interaction: discord.Interaction):
                 "https://discord.gg/qrMnzGztm3",
                 ephemeral=True
             )
-            print(f"Error en backup_crear: {e}")
 
+    # ============================
+    # BACKUP RESTAURAR
+    # ============================
 
-# ============================
-# BACKUP RESTAURAR
-# ============================
+    @app_commands.command(
+        name="backup_restaurar",
+        description="Restaura un backup del servidor (TOTAL A1)"
+    )
+    @app_commands.describe(
+        backup_id="ID del backup a restaurar"
+    )
+    async def backup_restaurar(self, interaction: discord.Interaction, backup_id: str):
 
-@app_commands.command(
-    name="backup_restaurar",
-    description="Restaura un backup del servidor (TOTAL A1)"
-)
-@app_commands.describe(
-    backup_id="ID del backup a restaurar"
-)
-async def backup_restaurar(self, interaction: discord.Interaction, backup_id: str):
+        guild = interaction.guild
+        user = interaction.user
+        user_id = user.id
 
-    guild = interaction.guild
-    user = interaction.user
-    user_id = user.id
-
-    # Permisos
-    if user.guild_permissions.administrator:
-        pass
-    elif not user.guild_permissions.manage_guild:
-        return await interaction.response.send_message(
-            "❌ No tienes permiso para restaurar backups del servidor.",
-            ephemeral=True
-        )
+        # Permisos
+        if not (user.guild_permissions.administrator or user.guild_permissions.manage_guild):
+            return await interaction.response.send_message(
+                "❌ No tienes permiso para restaurar backups del servidor.",
+                ephemeral=True
+            )
 
         await interaction.response.send_message(
             "⏳ Restaurando backup... Esto puede tardar unos segundos.",
@@ -216,11 +197,7 @@ async def backup_restaurar(self, interaction: discord.Interaction, backup_id: st
         try:
             data = load_backups(user_id)
 
-            backup = None
-            for b in data["backups"]:
-                if b["id"] == backup_id:
-                    backup = b
-                    break
+            backup = next((b for b in data["backups"] if b["id"] == backup_id), None)
 
             if not backup:
                 return await interaction.followup.send(
@@ -338,35 +315,33 @@ async def backup_restaurar(self, interaction: discord.Interaction, backup_id: st
             )
 
 
-    ## ============================
-# BACKUP LISTAR
+
 # ============================
+    # BACKUP LISTAR
+    # ============================
 
-@app_commands.command(
-    name="backup_listar",
-    description="Muestra todos los backups del usuario"
-)
-async def backup_listar(self, interaction: discord.Interaction):
+    @app_commands.command(
+        name="backup_listar",
+        description="Muestra todos los backups del usuario"
+    )
+    async def backup_listar(self, interaction: discord.Interaction):
 
-    user = interaction.user
-    user_id = user.id
+        user = interaction.user
+        user_id = user.id
 
-    # Permisos
-    if user.guild_permissions.administrator:
-        pass
-    elif not user.guild_permissions.manage_guild:
-        return await interaction.response.send_message(
-            "❌ No tienes permiso para ver backups.",
-            ephemeral=True
-        )
+        if not (user.guild_permissions.administrator or user.guild_permissions.manage_guild):
+            return await interaction.response.send_message(
+                "❌ No tienes permiso para ver backups.",
+                ephemeral=True
+            )
 
-    data = load_backups(user_id)
+        data = load_backups(user_id)
 
-    if not data["backups"]:
-        return await interaction.response.send_message(
-            "📭 No tienes backups creados.",
-            ephemeral=True
-        )
+        if not data["backups"]:
+            return await interaction.response.send_message(
+                "📭 No tienes backups creados.",
+                ephemeral=True
+            )
 
         mensaje = "📦 **Lista de backups disponibles:**\n\n"
 
@@ -378,7 +353,6 @@ async def backup_listar(self, interaction: discord.Interaction):
             )
 
         await interaction.response.send_message(mensaje, ephemeral=True)
-
 
     # ============================
     # BACKUP BORRAR
@@ -396,11 +370,7 @@ async def backup_listar(self, interaction: discord.Interaction):
         user_id = interaction.user.id
         data = load_backups(user_id)
 
-        backup = None
-        for b in data["backups"]:
-            if b["id"] == backup_id:
-                backup = b
-                break
+        backup = next((b for b in data["backups"] if b["id"] == backup_id), None)
 
         if not backup:
             return await interaction.response.send_message(
