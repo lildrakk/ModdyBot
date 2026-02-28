@@ -109,6 +109,8 @@ class GiveawayCog(commands.Cog):
         description="Crear un giveaway"
     )
     @app_commands.describe(
+        titulo="Título del giveaway",
+        descripcion="Descripción del giveaway",
         tiempo="Duración (ej: 10s, 5m, 2h, 1d)",
         premio="Premio del giveaway",
         imagen="Imagen adjunta (opcional)"
@@ -116,6 +118,8 @@ class GiveawayCog(commands.Cog):
     async def gstart(
         self,
         interaction: discord.Interaction,
+        titulo: str,
+        descripcion: str,
         tiempo: str,
         premio: str,
         imagen: discord.Attachment = None
@@ -140,8 +144,8 @@ class GiveawayCog(commands.Cog):
         save_giveaways(data)
 
         embed = discord.Embed(
-            title="🎉 GIVEAWAY 🎉",
-            description=f"**Premio:** {premio}\n**Termina en:** {tiempo}",
+            title=titulo,
+            description=f"{descripcion}\n\n**Premio:** {premio}\n**Termina en:** {tiempo}",
             color=discord.Color.random()
         )
 
