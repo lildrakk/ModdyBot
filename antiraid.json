@@ -2,6 +2,6 @@
     "enabled": true,
     "raid_limit": 5,
     "time_window": 5,
-    "new_account_minutes": 20160,
+    "min_account_days": 20,
     "action": "kick"
 }
