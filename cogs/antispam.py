@@ -337,32 +337,56 @@ class AntiSpamCog(commands.Cog):
         await self.build_panel(interaction, page)
 
     # ============================
-    # SLASH COMMAND
+# SLASH COMMAND
+# ============================
+
+@app_commands.command(
+    name="antispam",
+    description="Abrir panel de configuración Anti‑Spam"
+)
+async def antispam_cmd(self, interaction: discord.Interaction):
+
+    guild = interaction.guild
+    guild_id = str(guild.id)
+    cfg = self.ensure_guild_config(guild_id)
+
+    # ============================
+    # ✔ Comprobación de permisos
     # ============================
 
-    @app_commands.command(name="antispam", description="Abrir panel de configuración Anti‑Spam")
-    @app_commands.checks.has_permissions(manage_guild=True)
-    async def antispam_cmd(self, interaction):
-        guild = interaction.guild
-        guild_id = str(guild.id)
-        cfg = self.ensure_guild_config(guild_id)
+    # Si es administrador → acceso total
+    if interaction.user.guild_permissions.administrator:
+        pass
 
-        # Roles permitidos
-        if cfg["allowed_roles"]:
-            if not any(r.id in cfg["allowed_roles"] for r in interaction.user.roles):
-                return await interaction.response.send_message(
-                    "❌ No tienes permisos para usar este panel.",
-                    ephemeral=True
-                )
-
-        await interaction.response.send_message(
-            "✅ Panel Anti‑Spam abierto en este canal.",
+    # Si NO es admin → debe tener manage_guild
+    elif not interaction.user.guild_permissions.manage_guild:
+        return await interaction.response.send_message(
+            "❌ No tienes permiso para usar este comando.",
             ephemeral=True
         )
 
-        self.panel_owner[guild_id] = interaction.user.id
-        self.user_pages[interaction.user.id] = 1
-        await self.build_panel(interaction, 1)
+    # Si NO es admin y NO tiene manage_guild → comprobar roles permitidos
+    elif cfg["allowed_roles"]:
+        if not any(r.id in cfg["allowed_roles"] for r in interaction.user.roles):
+            return await interaction.response.send_message(
+                "❌ No tienes permisos para usar este panel.",
+                ephemeral=True
+            )
+
+    # ============================
+    # Abrir panel
+    # ============================
+
+    await interaction.response.send_message(
+        "✅ Panel Anti‑Spam abierto en este canal.",
+        ephemeral=True
+    )
+
+    self.panel_owner[guild_id] = interaction.user.id
+    self.user_pages[interaction.user.id] = 1
+    await self.build_panel(interaction, 1)
+
+        
 
     # ============================
     # INTERACCIONES
