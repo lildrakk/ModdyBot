@@ -41,43 +41,62 @@ class AntiMentionCog(commands.Cog):
 
 
     # ============================
-    # /antimention
+# /antimention
+# ============================
+
+@app_commands.command(
+    name="antimention",
+    description="Activa o desactiva el sistema anti-mentions"
+)
+@app_commands.describe(estado="on/off")
+async def antimention_cmd(self, interaction: discord.Interaction, estado: str):
+
+    guild_id = str(interaction.guild.id)
+
+    # Crear config si no existe
+    if guild_id not in self.config:
+        self.config[guild_id] = {"enabled": False}
+
+    # ============================
+    # ✔ Comprobación de permisos
     # ============================
 
-    @app_commands.command(
-        name="antimention",
-        description="Activa o desactiva el sistema anti-mentions"
+    # Si es administrador → permitir siempre
+    if interaction.user.guild_permissions.administrator:
+        pass
+
+    # Si NO es admin → comprobar si tiene manage_messages
+    elif not interaction.user.guild_permissions.manage_messages:
+        return await interaction.response.send_message(
+            "❌ No tienes permiso para usar este comando.",
+            ephemeral=True
+        )
+
+    # ============================
+    # Lógica del comando
+    # ============================
+
+    if estado.lower() == "on":
+        self.config[guild_id]["enabled"] = True
+        save_antimention(self.config)
+        return await interaction.response.send_message(
+            "📣 Anti‑mention **activado** en este servidor.",
+            ephemeral=True
+        )
+
+    elif estado.lower() == "off":
+        self.config[guild_id]["enabled"] = False
+        save_antimention(self.config)
+        return await interaction.response.send_message(
+            "📣 Anti‑mention **desactivado**.",
+            ephemeral=True
+        )
+
+    else:
+        return await interaction.response.send_message(
+            "❌ Usa: `on` o `off`.",
+            ephemeral=True
     )
-    @app_commands.describe(estado="on/off")
-    @app_commands.checks.has_permissions(manage_messages=True)
-    async def antimention_cmd(self, interaction: discord.Interaction, estado: str):
-
-        guild_id = str(interaction.guild.id)
-
-        if guild_id not in self.config:
-            self.config[guild_id] = {"enabled": False}
-
-        if estado.lower() == "on":
-            self.config[guild_id]["enabled"] = True
-            save_antimention(self.config)
-            return await interaction.response.send_message(
-                "📣 Anti‑mention **activado** en este servidor.",
-                ephemeral=True
-            )
-
-        elif estado.lower() == "off":
-            self.config[guild_id]["enabled"] = False
-            save_antimention(self.config)
-            return await interaction.response.send_message(
-                "📣 Anti‑mention **desactivado**.",
-                ephemeral=True
-            )
-
-        else:
-            return await interaction.response.send_message(
-                "❌ Usa: `on` o `off`.",
-                ephemeral=True
-            )
 
 
     # ============================
