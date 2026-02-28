@@ -54,30 +54,6 @@ def generar_captcha():
 
 
 # ============================
-# BOTÓN PERSISTENTE
-# ============================
-
-class VerifyButtonItem(discord.ui.Button):
-    def __init__(self, panel_id, label):
-        super().__init__(
-            label=label,
-            emoji="🔐",
-            style=discord.ButtonStyle.primary,
-            custom_id=f"verify_{panel_id}"
-        )
-        self.panel_id = panel_id
-
-    async def callback(self, interaction: discord.Interaction):
-        pass
-
-
-class VerifyButton(discord.ui.View):
-    def __init__(self, panel_id, label):
-        super().__init__(timeout=None)
-        self.add_item(VerifyButtonItem(panel_id, label))
-
-
-# ============================
 # MODAL CAPTCHA
 # ============================
 
@@ -108,6 +84,30 @@ class CaptchaModal(discord.ui.Modal, title="Verificación con Captcha"):
 
 
 # ============================
+# BOTÓN DEL PANEL
+# ============================
+
+class VerifyButtonItem(discord.ui.Button):
+    def __init__(self, panel_id, label):
+        super().__init__(
+            label=label,
+            emoji="🔐",
+            style=discord.ButtonStyle.primary,
+            custom_id=f"verify_{panel_id}"
+        )
+        self.panel_id = panel_id
+
+    async def callback(self, interaction: discord.Interaction):
+        pass
+
+
+class VerifyButton(discord.ui.View):
+    def __init__(self, panel_id, label):
+        super().__init__(timeout=None)
+        self.add_item(VerifyButtonItem(panel_id, label))
+
+
+# ============================
 # COG PRINCIPAL
 # ============================
 
@@ -118,8 +118,7 @@ class VerificationCog(commands.Cog):
         data = load_verification()
         for guild_id in data:
             for panel_id, cfg in data[guild_id].items():
-                label = cfg.get("boton", "Verificar")
-                bot.add_view(VerifyButton(panel_id, label))
+                bot.add_view(VerifyButton(panel_id, cfg["boton"]))
 
     # ============================
     # COMANDO PARA CREAR PANEL
@@ -138,7 +137,7 @@ class VerificationCog(commands.Cog):
         rol_quitar="Rol que se quitará al verificar",
         texto_boton="Texto del botón",
         tipo="normal o captcha",
-        texto_captcha="Texto que aparecerá encima del captcha (si es captcha)"
+        texto_captcha="Texto que aparecerá encima del captcha"
     )
     async def verificacion_crear(
         self,
@@ -241,10 +240,53 @@ class VerificationCog(commands.Cog):
         file = discord.File(imagen, filename="captcha.png")
         embed.set_image(url="attachment://captcha.png")
 
-        await interaction.response.send_message(embed=embed, file=file, ephemeral=True)
+        # MENÚ EPHEMERAL
+        select = discord.ui.Select(
+            placeholder="Selecciona una opción",
+            options=[
+                discord.SelectOption(label="Responder", value="responder")
+            ]
+        )
 
-        await interaction.followup.send_modal(
-            CaptchaModal(codigo, rol_dar, rol_quitar)
+        async def select_callback(select_interaction: discord.Interaction):
+            if select_interaction.user.id != interaction.user.id:
+                return await select_interaction.response.send_message("❌ No puedes usar este menú.", ephemeral=True)
+
+            # BOTÓN RESPONDER
+            responder_btn = discord.ui.Button(
+                label="Responder",
+                style=discord.ButtonStyle.primary
+            )
+
+            async def responder_callback(btn_interaction: discord.Interaction):
+                if btn_interaction.user.id != interaction.user.id:
+                    return await btn_interaction.response.send_message("❌ No puedes usar este botón.", ephemeral=True)
+
+                await btn_interaction.response.send_modal(
+                    CaptchaModal(codigo, rol_dar, rol_quitar)
+                )
+
+            responder_btn.callback = responder_callback
+
+            view2 = discord.ui.View()
+            view2.add_item(responder_btn)
+
+            await select_interaction.response.send_message(
+                "Pulsa **Responder** para escribir el código:",
+                view=view2,
+                ephemeral=True
+            )
+
+        select.callback = select_callback
+
+        view = discord.ui.View()
+        view.add_item(select)
+
+        await interaction.response.send_message(
+            embed=embed,
+            file=file,
+            view=view,
+            ephemeral=True
         )
 
 
