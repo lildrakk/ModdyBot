@@ -47,84 +47,103 @@ class AntiRaidCog(commands.Cog):
 
 
     # ============================
-    # COMANDO /antiraid
+# COMANDO /antiraid
+# ============================
+
+@app_commands.command(
+    name="antiraid",
+    description="Configura el sistema Anti-Raid"
+)
+@app_commands.describe(
+    enabled="Activa o desactiva el Anti-Raid (on/off)",
+    action="Acción cuando se detecta un raid: kick / ban / lockdown",
+    raid_limit="Usuarios necesarios para detectar raid",
+    time_window="Segundos para medir el raid",
+    min_account_days="Días mínimos de antigüedad de cuenta"
+)
+async def antiraid_config(
+    self,
+    interaction: discord.Interaction,
+    enabled: str = None,
+    action: str = None,
+    raid_limit: int = None,
+    time_window: int = None,
+    min_account_days: int = None
+):
+
+    # ============================
+    # ✔ Comprobación de permisos
     # ============================
 
-    @app_commands.command(
-        name="antiraid",
-        description="Configura el sistema Anti-Raid"
-    )
-    @app_commands.describe(
-        enabled="Activa o desactiva el Anti-Raid (on/off)",
-        action="Acción cuando se detecta un raid: kick / ban / lockdown",
-        raid_limit="Usuarios necesarios para detectar raid",
-        time_window="Segundos para medir el raid",
-        min_account_days="Días mínimos de antigüedad de cuenta"
-    )
-    async def antiraid_config(
-        self,
-        interaction: discord.Interaction,
-        enabled: str = None,
-        action: str = None,
-        raid_limit: int = None,
-        time_window: int = None,
-        min_account_days: int = None
-    ):
+    # Si es administrador → permitir siempre
+    if interaction.user.guild_permissions.administrator:
+        pass
 
-        cambios = []
+    # Si NO es admin → debe tener manage_guild
+    elif not interaction.user.guild_permissions.manage_guild:
+        return await interaction.response.send_message(
+            "❌ No tienes permiso para usar este comando.",
+            ephemeral=True
+        )
 
-        # Activar / desactivar
-        if enabled:
-            enabled = enabled.lower()
-            if enabled in ["on", "off"]:
-                self.antiraid["enabled"] = (enabled == "on")
-                cambios.append(f"🟢 Anti-Raid: **{enabled.upper()}**")
-            else:
-                return await interaction.response.send_message(
-                    "❌ Usa: on / off",
-                    ephemeral=True
-                )
+    # ============================
+    # Lógica del comando
+    # ============================
 
-        # Acción
-        if action:
-            action = action.lower()
-            if action in ["kick", "ban", "lockdown"]:
-                self.antiraid["action"] = action
-                cambios.append(f"⚙️ Acción: **{action.upper()}**")
-            else:
-                return await interaction.response.send_message(
-                    "❌ Acciones válidas: kick / ban / lockdown",
-                    ephemeral=True
-                )
+    cambios = []
 
-        # Límite de raid
-        if raid_limit:
-            self.antiraid["raid_limit"] = raid_limit
-            cambios.append(f"👥 Límite de raid: **{raid_limit} usuarios**")
-
-        # Ventana de tiempo
-        if time_window:
-            self.antiraid["time_window"] = time_window
-            cambios.append(f"⏳ Ventana de tiempo: **{time_window} segundos**")
-
-        # Antigüedad mínima (DÍAS)
-        if min_account_days:
-            self.antiraid["min_account_days"] = min_account_days
-            cambios.append(
-                f"📅 Antigüedad mínima: **{min_account_days} días**"
-            )
-
-        save_antiraid(self.antiraid)
-
-        if not cambios:
+    # Activar / desactivar
+    if enabled:
+        enabled = enabled.lower()
+        if enabled in ["on", "off"]:
+            self.antiraid["enabled"] = (enabled == "on")
+            cambios.append(f"🟢 Anti-Raid: **{enabled.upper()}**")
+        else:
             return await interaction.response.send_message(
-                "ℹ️ No se ha cambiado nada. Usa las opciones del comando.",
+                "❌ Usa: on / off",
                 ephemeral=True
             )
 
-        mensaje = "🛡️ **Anti-Raid actualizado:**\n" + "\n".join(cambios)
+    # Acción
+    if action:
+        action = action.lower()
+        if action in ["kick", "ban", "lockdown"]:
+            self.antiraid["action"] = action
+            cambios.append(f"⚙️ Acción: **{action.upper()}**")
+        else:
+            return await interaction.response.send_message(
+                "❌ Acciones válidas: kick / ban / lockdown",
+                ephemeral=True
+            )
 
-        await interaction.response.send_message(mensaje, ephemeral=True)
+    # Límite de raid
+    if raid_limit:
+        self.antiraid["raid_limit"] = raid_limit
+        cambios.append(f"👥 Límite de raid: **{raid_limit} usuarios**")
+
+    # Ventana de tiempo
+    if time_window:
+        self.antiraid["time_window"] = time_window
+        cambios.append(f"⏳ Ventana de tiempo: **{time_window} segundos**")
+
+    # Antigüedad mínima (DÍAS)
+    if min_account_days:
+        self.antiraid["min_account_days"] = min_account_days
+        cambios.append(
+            f"📅 Antigüedad mínima: **{min_account_days} días**"
+        )
+
+    save_antiraid(self.antiraid)
+
+    if not cambios:
+        return await interaction.response.send_message(
+            "ℹ️ No se ha cambiado nada. Usa las opciones del comando.",
+            ephemeral=True
+        )
+
+    mensaje = "🛡️ **Anti-Raid actualizado:**\n" + "\n".join(cambios)
+
+    await interaction.response.send_message(mensaje, ephemeral=True) 
 
 
     # ============================
