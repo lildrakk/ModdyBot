@@ -98,19 +98,19 @@ class Blacklist(commands.Cog):
             blacklist_servers[gid] = {"users": {}}
 
         blacklist_servers[gid]["users"][uid] = {
-    "accion": accion,
-    "minutos": minutos if accion == "mute" else 0,
-    "razon": razon
-}
+            "accion": accion,
+            "minutos": minutos if accion == "mute" else 0,
+            "razon": razon
+        }
 
-save_json("blacklist_servers.json", blacklist_servers)
+        save_json("blacklist_servers.json", blacklist_servers)
 
-await interaction.response.send_message(
-    f"🚫 {usuario.mention} añadido a la blacklist del servidor.\n"
-    f"**Acción:** {accion}\n"
-    f"**Razón:** {razon}",
-    ephemeral=True
-)
+        await interaction.response.send_message(
+            f"🚫 {usuario.mention} añadido a la blacklist del servidor.\n"
+            f"**Acción:** {accion}\n"
+            f"**Razón:** {razon}",
+            ephemeral=True
+        )
 
 @app_commands.command(
     name="unblacklist",
