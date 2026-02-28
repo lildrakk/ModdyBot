@@ -16,6 +16,7 @@ def load_welcome():
     if not os.path.exists(WELCOME_FILE):
         with open(WELCOME_FILE, "w") as f:
             json.dump({}, f, indent=4)
+
     with open(WELCOME_FILE, "r") as f:
         return json.load(f)
 
@@ -84,7 +85,7 @@ class WelcomeChannelCog(commands.Cog):
         )
 
 
-# ============================
+    # ============================
     # EVENTO: on_member_join
     # ============================
 
@@ -93,7 +94,7 @@ class WelcomeChannelCog(commands.Cog):
 
         guild_id = str(member.guild.id)
 
-        # Si el servidor no tiene bienvenida configurada, no hacemos nada
+        # Si no hay configuración → no hacemos nada
         if guild_id not in self.welcome_config:
             return
 
@@ -110,15 +111,15 @@ class WelcomeChannelCog(commands.Cog):
         # Mensaje de bienvenida
         mensaje = config.get(
             "welcome_message",
-            "Bienvenido {user} a {server}!"
+            "🎉 Bienvenido {user} a **{server}**!"
         )
 
-        mensaje = mensaje.replace("{user}", member.mention)
+        # Reemplazos
+        mensaje = mensaje.replace("{user}", member.mention)  # PING REAL
         mensaje = mensaje.replace("{server}", member.guild.name)
 
-        # Embed de bienvenida
+        # Embed
         embed = discord.Embed(
-            title="🎉 ¡Nuevo miembro!",
             description=mensaje,
             color=0x00ffcc
         )
