@@ -418,14 +418,14 @@ class AntiSpamCog(commands.Cog):
                 pass
             return
 
-        # ============================
-        # MODALS
+# ============================
+        # MODALS (CORREGIDOS)
         # ============================
 
         class SpamModal(discord.ui.Modal):
-            def __init__(self, outer, title, label, cb):
+            def __init__(self, cog, title, label, cb):
                 super().__init__(title=title)
-                self.outer = outer
+                self.cog = cog          # referencia correcta al COG
                 self.cb = cb
                 self.input = discord.ui.TextInput(label=label, required=True)
                 self.add_item(self.input)
@@ -437,9 +437,9 @@ class AntiSpamCog(commands.Cog):
         if custom_id == "spam_change_action":
             async def cb(i, value):
                 cfg["action"] = value.lower()
-                save_antispam(self.outer.config)
+                save_antispam(self.cog.config)
                 await i.response.send_message("💾 Acción actualizada.", ephemeral=True)
-                await self.outer.spam_update_panel(i, page)
+                await self.cog.spam_update_panel(i, page)
 
             return await interaction.response.send_modal(
                 SpamModal(self, "Cambiar acción", "Acción:", cb)
@@ -449,9 +449,9 @@ class AntiSpamCog(commands.Cog):
         if custom_id == "spam_change_mute_time":
             async def cb(i, value):
                 cfg["mute_time"] = max(1, int(value))
-                save_antispam(self.outer.config)
+                save_antispam(self.cog.config)
                 await i.response.send_message("💾 Tiempo mute actualizado.", ephemeral=True)
-                await self.outer.spam_update_panel(i, page)
+                await self.cog.spam_update_panel(i, page)
 
             return await interaction.response.send_modal(
                 SpamModal(self, "Cambiar tiempo mute", "Segundos:", cb)
@@ -461,9 +461,9 @@ class AntiSpamCog(commands.Cog):
         if custom_id == "spam_change_flood_max":
             async def cb(i, value):
                 cfg["flood"]["max_messages"] = max(1, int(value))
-                save_antispam(self.outer.config)
+                save_antispam(self.cog.config)
                 await i.response.send_message("💾 Máx. mensajes actualizado.", ephemeral=True)
-                await self.outer.spam_update_panel(i, page)
+                await self.cog.spam_update_panel(i, page)
 
             return await interaction.response.send_modal(
                 SpamModal(self, "Cambiar máx. mensajes", "Cantidad:", cb)
@@ -473,9 +473,9 @@ class AntiSpamCog(commands.Cog):
         if custom_id == "spam_change_flood_interval":
             async def cb(i, value):
                 cfg["flood"]["interval"] = max(1, int(value))
-                save_antispam(self.outer.config)
+                save_antispam(self.cog.config)
                 await i.response.send_message("💾 Intervalo actualizado.", ephemeral=True)
-                await self.outer.spam_update_panel(i, page)
+                await self.cog.spam_update_panel(i, page)
 
             return await interaction.response.send_modal(
                 SpamModal(self, "Cambiar intervalo", "Segundos:", cb)
@@ -485,9 +485,9 @@ class AntiSpamCog(commands.Cog):
         if custom_id == "spam_change_caps_max":
             async def cb(i, value):
                 cfg["caps"]["max_caps"] = max(1, int(value))
-                save_antispam(self.outer.config)
+                save_antispam(self.cog.config)
                 await i.response.send_message("💾 % máximo actualizado.", ephemeral=True)
-                await self.outer.spam_update_panel(i, page)
+                await self.cog.spam_update_panel(i, page)
 
             return await interaction.response.send_modal(
                 SpamModal(self, "Cambiar % máximo", "Porcentaje:", cb)
@@ -497,9 +497,9 @@ class AntiSpamCog(commands.Cog):
         if custom_id == "spam_change_repeat_max":
             async def cb(i, value):
                 cfg["repeat"]["max_repeat"] = max(1, int(value))
-                save_antispam(self.outer.config)
+                save_antispam(self.cog.config)
                 await i.response.send_message("💾 Repeticiones actualizadas.", ephemeral=True)
-                await self.outer.spam_update_panel(i, page)
+                await self.cog.spam_update_panel(i, page)
 
             return await interaction.response.send_modal(
                 SpamModal(self, "Cambiar repeticiones", "Cantidad:", cb)
@@ -509,13 +509,15 @@ class AntiSpamCog(commands.Cog):
         if custom_id == "spam_change_cooldown":
             async def cb(i, value):
                 cfg["cooldown"] = max(0, int(value))
-                save_antispam(self.outer.config)
+                save_antispam(self.cog.config)
                 await i.response.send_message("💾 Cooldown actualizado.", ephemeral=True)
-                await self.outer.spam_update_panel(i, page)
+                await self.cog.spam_update_panel(i, page)
 
             return await interaction.response.send_modal(
                 SpamModal(self, "Cambiar cooldown", "Segundos:", cb)
             )
+
+  
 
         # ============================
         # ACCIONES QUE SOLO ACTUALIZAN PANEL
