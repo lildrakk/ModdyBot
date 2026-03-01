@@ -178,6 +178,7 @@ class ReactionRoles(commands.Cog):
 
     # ---------- Comandos de configuración ----------
 
+    @app_commands.checks.has_permissions(administrator=True)
     @app_commands.command(name="reactionroles", description="Abre el panel de Reaction Roles")
     async def reactionroles_cmd(self, interaction: discord.Interaction):
         if not interaction.guild:
@@ -190,6 +191,7 @@ class ReactionRoles(commands.Cog):
         view = RRPanelView(self, interaction.guild)
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
+    @app_commands.checks.has_permissions(administrator=True)
     @app_commands.command(name="rr_toggle", description="Activa o desactiva el sistema de Reaction Roles")
     async def rr_toggle(self, interaction: discord.Interaction):
         if not interaction.guild:
@@ -206,6 +208,7 @@ class ReactionRoles(commands.Cog):
             ephemeral=True
         )
 
+    @app_commands.checks.has_permissions(administrator=True)
     @app_commands.command(name="rr_add", description="Añade un reaction role a un mensaje")
     @app_commands.describe(
         mensaje_id="ID del mensaje (copia el ID con modo desarrollador)",
@@ -254,6 +257,7 @@ class ReactionRoles(commands.Cog):
             ephemeral=True
         )
 
+    @app_commands.checks.has_permissions(administrator=True)
     @app_commands.command(name="rr_remove", description="Elimina un reaction role de un mensaje")
     @app_commands.describe(
         mensaje_id="ID del mensaje",
@@ -287,6 +291,7 @@ class ReactionRoles(commands.Cog):
             ephemeral=True
         )
 
+    @app_commands.checks.has_permissions(administrator=True)
     @app_commands.command(name="rr_list", description="Lista los reaction roles configurados en el servidor")
     async def rr_list(self, interaction: discord.Interaction):
         if not interaction.guild:
@@ -320,7 +325,7 @@ class ReactionRoles(commands.Cog):
             )
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
-
+        
     # ---------- Eventos de reacción ----------
 
     @commands.Cog.listener()
