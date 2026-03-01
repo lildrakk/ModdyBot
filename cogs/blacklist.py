@@ -41,7 +41,10 @@ class Blacklist(commands.Cog):
     # PANEL GLOBAL
     # ============================
 
-    @app_commands.command(name="global_panel", description="Abre el panel PRO de blacklist global")
+    @app_commands.command(
+        name="global_panel",
+        description="Abre el panel PRO de blacklist global"
+    )
     async def global_panel_cmd(self, interaction: discord.Interaction):
         if interaction.user.id != GLOBAL_OWNER_ID:
             return await interaction.response.send_message(
@@ -75,7 +78,6 @@ class Blacklist(commands.Cog):
         minutos: int = 10,
         razon: str = "No especificada"
     ):
-
         user = interaction.user
 
         if not (user.guild_permissions.administrator or user.guild_permissions.manage_guild):
@@ -112,67 +114,76 @@ class Blacklist(commands.Cog):
             ephemeral=True
         )
 
-@app_commands.command(
-    name="unblacklist",
-    description="Quita un usuario de la blacklist del servidor"
-)
-async def unblacklist_cmd(self, interaction: discord.Interaction, usuario: discord.User):
+    @app_commands.command(
+        name="unblacklist",
+        description="Quita un usuario de la blacklist del servidor"
+    )
+    async def unblacklist_cmd(
+        self,
+        interaction: discord.Interaction,
+        usuario: discord.User
+    ):
+        user = interaction.user
 
-    user = interaction.user
+        if not (user.guild_permissions.administrator or user.guild_permissions.manage_guild):
+            return await interaction.response.send_message(
+                "❌ No tienes permisos.",
+                ephemeral=True
+            )
 
-    if not (user.guild_permissions.administrator or user.guild_permissions.manage_guild):
-        return await interaction.response.send_message(
-            "❌ No tienes permisos.",
+        gid = str(interaction.guild.id)
+        uid = str(usuario.id)
+
+        if gid not in blacklist_servers or uid not in blacklist_servers[gid]["users"]:
+            return await interaction.response.send_message(
+                "ℹ️ Ese usuario no está en la blacklist.",
+                ephemeral=True
+            )
+
+        del blacklist_servers[gid]["users"][uid]
+        save_json("blacklist_servers.json", blacklist_servers)
+
+        await interaction.response.send_message(
+            f"✅ {usuario.mention} eliminado de la blacklist del servidor.",
             ephemeral=True
         )
 
-    gid = str(interaction.guild.id)
-    uid = str(usuario.id)
+    @app_commands.command(
+        name="blacklistlist",
+        description="Lista la blacklist del servidor"
+    )
+    async def blacklistlist_cmd(self, interaction: discord.Interaction):
+        gid = str(interaction.guild.id)
 
-    if gid not in blacklist_servers or uid not in blacklist_servers[gid]["users"]:
-        return await interaction.response.send_message(
-            "ℹ️ Ese usuario no está en la blacklist.",
-            ephemeral=True
+        if gid not in blacklist_servers or not blacklist_servers[gid]["users"]:
+            return await interaction.response.send_message(
+                "📭 La blacklist está vacía.",
+                ephemeral=True
+            )
+
+        embed = discord.Embed(
+            title=f"📜 Blacklist de {interaction.guild.name}",
+            color=discord.Color.red()
         )
 
-    del blacklist_servers[gid]["users"][uid]
-    save_json("blacklist_servers.json", blacklist_servers)
+        for uid, data in blacklist_servers[gid]["users"].items():
+            accion = data["accion"]
+            minutos = data.get("minutos", 0)
 
-    await interaction.response.send_message(
-        f"✅ {usuario.mention} eliminado de la blacklist del servidor.",
-        ephemeral=True
-    )
+            if accion == "mute" and minutos == 0:
+                accion_texto = "mute permanente"
+            elif accion == "mute":
+                accion_texto = f"mute {minutos} min"
+            else:
+                accion_texto = accion
 
-@app_commands.command(name="blacklistlist", description="Lista la blacklist del servidor")
-async def blacklistlist_cmd(self, interaction: discord.Interaction):
-    gid = str(interaction.guild.id)
+            embed.add_field(
+                name=f"Usuario ID: {uid}",
+                value=f"Acción: **{accion_texto}**\nRazón: {data['razon']}",
+                inline=False
+            )
 
-    if gid not in blacklist_servers or not blacklist_servers[gid]["users"]:
-        return await interaction.response.send_message("📭 La blacklist está vacía.", ephemeral=True)
-
-    embed = discord.Embed(
-        title=f"📜 Blacklist de {interaction.guild.name}",
-        color=discord.Color.red()
-    )
-
-    for uid, data in blacklist_servers[gid]["users"].items():
-        accion = data["accion"]
-        minutos = data.get("minutos", 0)
-
-        if accion == "mute" and minutos == 0:
-            accion_texto = "mute permanente"
-        elif accion == "mute":
-            accion_texto = f"mute {minutos} min"
-        else:
-            accion_texto = accion
-
-        embed.add_field(
-            name=f"Usuario ID: {uid}",
-            value=f"Acción: **{accion_texto}**\nRazón: {data['razon']}",
-            inline=False
-        )
-
-    await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
 
@@ -180,7 +191,10 @@ async def blacklistlist_cmd(self, interaction: discord.Interaction):
     # BLACKLIST GLOBAL
     # ============================
 
-    @app_commands.command(name="global_blacklist", description="Añade un usuario a la blacklist GLOBAL")
+    @app_commands.command(
+        name="global_blacklist",
+        description="Añade un usuario a la blacklist GLOBAL"
+    )
     async def global_blacklist_cmd(
         self,
         interaction: discord.Interaction,
@@ -197,7 +211,7 @@ async def blacklistlist_cmd(self, interaction: discord.Interaction):
         blacklist_global[uid] = {"razon": razon}
         save_json("blacklist_global.json", blacklist_global)
 
-        # DM al usuario
+        # DM al usuario con imagen grande
         try:
             embed = discord.Embed(
                 title="🚫 Aviso de Sanción Global",
@@ -210,19 +224,35 @@ async def blacklistlist_cmd(self, interaction: discord.Interaction):
             )
 
             file = discord.File("assets/md_alert.jpeg", filename="alerta.jpeg")
-            embed.set_thumbnail(url="attachment://alerta.jpeg")
+            embed.set_image(url="attachment://alerta.jpeg")
 
             await usuario.send(embed=embed, file=file)
         except:
             pass
+
+        # Ban global inmediato en todos los servidores
+        for guild in self.bot.guilds:
+            member = guild.get_member(usuario.id)
+            if member:
+                try:
+                    await member.ban(reason="Blacklist global")
+                except:
+                    pass
 
         await interaction.response.send_message(
             f"🌐 {usuario.mention} añadido a la blacklist global.",
             ephemeral=True
         )
 
-    @app_commands.command(name="global_unblacklist", description="Quita un usuario de la blacklist GLOBAL")
-    async def global_unblacklist_cmd(self, interaction: discord.Interaction, usuario: discord.User):
+    @app_commands.command(
+        name="global_unblacklist",
+        description="Quita un usuario de la blacklist GLOBAL"
+    )
+    async def global_unblacklist_cmd(
+        self,
+        interaction: discord.Interaction,
+        usuario: discord.User
+    ):
         if interaction.user.id != GLOBAL_OWNER_ID:
             return await interaction.response.send_message(
                 "❌ Solo el dueño del bot puede usar este comando.",
@@ -245,7 +275,10 @@ async def blacklistlist_cmd(self, interaction: discord.Interaction):
             ephemeral=True
         )
 
-    @app_commands.command(name="global_blacklistlist", description="Lista la blacklist GLOBAL")
+    @app_commands.command(
+        name="global_blacklistlist",
+        description="Lista la blacklist GLOBAL"
+    )
     async def global_blacklistlist_cmd(self, interaction: discord.Interaction):
         if interaction.user.id != GLOBAL_OWNER_ID:
             return await interaction.response.send_message(
@@ -305,7 +338,6 @@ async def blacklistlist_cmd(self, interaction: discord.Interaction):
             except:
                 pass
 
-
 # ============================
 # PANEL GLOBAL
 # ============================
@@ -326,7 +358,6 @@ def build_global_embed():
     )
     embed.set_footer(text="Solo el dueño del bot puede usar este panel.")
     return embed
-
 
 # ============================
 # MODALS Y VIEW
@@ -351,7 +382,6 @@ class GlobalAddModal(discord.ui.Modal, title="➕ Añadir a Blacklist Global"):
             ephemeral=True
         )
 
-
 class GlobalRemoveModal(discord.ui.Modal, title="➖ Eliminar de Blacklist Global"):
     user_id = discord.ui.TextInput(label="ID de usuario", placeholder="123456789012345678")
 
@@ -374,7 +404,6 @@ class GlobalRemoveModal(discord.ui.Modal, title="➖ Eliminar de Blacklist Globa
             f"✅ Usuario ID `{uid}` eliminado de la blacklist global.",
             ephemeral=True
         )
-
 
 class GlobalBlacklistView(discord.ui.View):
     def __init__(self, bot: commands.Bot):
@@ -405,7 +434,6 @@ class GlobalBlacklistView(discord.ui.View):
         if interaction.user.id != GLOBAL_OWNER_ID:
             return await interaction.response.send_message("❌ No puedes usar este panel.", ephemeral=True)
         await interaction.response.edit_message(content="Panel cerrado.", embed=None, view=None)
-
 
 # ============================
 # SETUP DEL COG
