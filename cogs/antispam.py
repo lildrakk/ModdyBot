@@ -646,11 +646,17 @@ class AntiSpamCog(commands.Cog):
         if len(self.user_messages[user.id]) >= cfg["flood"]["max_messages"]:
             if user.id not in self.warned or now - self.warned[user.id] > interval:
                 self.warned[user.id] = now
-                await message.channel.send(
-                    f"{user.mention} ⚠️ Si continúas haciendo spam recibirás: **{cfg['action']}**",
-                    delete_after=5
+
+                embed = discord.Embed(
+                    title="## ⚠️ Aviso de flood",
+                    description="\u200b\n"
+                                f"**{user.mention}, si continúas haciendo spam recibirás `{cfg['action']}`**",
+                    color=discord.Color.orange()
                 )
+
+                await message.channel.send(embed=embed, delete_after=5)
                 return
+
             return await self.apply_action(message, "flood")
 
         # Repetición
@@ -661,14 +667,40 @@ class AntiSpamCog(commands.Cog):
                 if len(set(last_n)) == 1:
                     if user.id not in self.warned or now - self.warned[user.id] > interval:
                         self.warned[user.id] = now
-                        await message.channel.send(
-                            f"{user.mention} ⚠️ Si continúas repitiendo mensajes recibirás: **{cfg['action']}**",
-                            delete_after=5
+
+                        embed = discord.Embed(
+                            title="## ⚠️ Aviso de repetición",
+                            description="\u200b\n"
+                                        f"**{user.mention}, si continúas repitiendo mensajes recibirás `{cfg['action']}`**",
+                            color=discord.Color.orange()
                         )
+
+                        await message.channel.send(embed=embed, delete_after=5)
                         return
+
                     return await self.apply_action(message, "repeat")
 
         # Mayúsculas
+        if cfg["caps"]["enabled"]:
+            letters = [c for c in content if c.isalpha()]
+            if letters:
+                caps = sum(1 for c in letters if c.isupper())
+                percent = (caps / len(letters)) * 100
+                if percent >= cfg["caps"]["max_caps"]:
+                    if user.id not in self.warned or now - self.warned[user.id] > interval:
+                        self.warned[user.id] = now
+
+                        embed = discord.Embed(
+                            title="## ⚠️ Aviso de mayúsculas",
+                            description="\u200b\n"
+                                        f"**{user.mention}, si continúas usando mayúsculas recibirás `{cfg['action']}`**",
+                            color=discord.Color.orange()
+                        )
+
+                        await message.channel.send(embed=embed, delete_after=5)
+                        return
+
+                    return await self.apply_action(message, "caps")# Mayúsculas
         if cfg["caps"]["enabled"]:
             letters = [c for c in content if c.isalpha()]
             if letters:
@@ -708,10 +740,14 @@ class AntiSpamCog(commands.Cog):
 
         # Warn
         if action == "warn":
-            await message.channel.send(
-                f"{user.mention} ⚠️ Evita hacer spam ({reason}).",
-                delete_after=5
+            embed = discord.Embed(
+                title="## ⚠️ Aviso",
+                description="\u200b\n"
+                            f"**{user.mention}, evita hacer spam ({reason}).**",
+                color=discord.Color.orange()
             )
+
+            await message.channel.send(embed=embed, delete_after=5)
             return
 
         # Kick
@@ -744,10 +780,14 @@ class AntiSpamCog(commands.Cog):
             except:
                 pass
 
-            await message.channel.send(
-                f"{user.mention} ⛔ Has sido muteado por **{duration} segundos** por spam.",
-                delete_after=5
+            embed = discord.Embed(
+                title="## ⛔ Usuario muteado",
+                description="\u200b\n"
+                            f"**{user.mention}, has sido muteado por `{duration}` segundos por spam.**",
+                color=discord.Color.red()
             )
+
+            await message.channel.send(embed=embed, delete_after=5)
             return
 
 
