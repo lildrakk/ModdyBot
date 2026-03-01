@@ -207,8 +207,7 @@ class AntiLinksCog(commands.Cog):
 
 
 
-    await self.build_panel(interaction, page=1)
-
+    
     # ============================
     # LISTENER DE COMPONENTES
     # ============================
