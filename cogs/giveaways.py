@@ -67,7 +67,7 @@ class JoinButton(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction):
         data = load_giveaways()
 
-        if self.giveaway_id not in data:
+        if self.ggiveaway_id not in data:
             return await interaction.response.send_message("❌ Este giveaway ya no existe.", ephemeral=True)
 
         participantes = data[self.giveaway_id]["participantes"]
@@ -104,6 +104,7 @@ class GiveawayCog(commands.Cog):
     # COMANDO PARA CREAR GIVEAWAY
     # ============================
 
+    @app_commands.checks.has_permissions(administrator=True)
     @app_commands.command(
         name="gstart",
         description="Crear un giveaway"
@@ -197,6 +198,7 @@ class GiveawayCog(commands.Cog):
     # REROLL
     # ============================
 
+    @app_commands.checks.has_permissions(administrator=True)
     @app_commands.command(
         name="greroll",
         description="Hacer reroll de un giveaway terminado"
