@@ -648,7 +648,7 @@ class AntiSpamCog(commands.Cog):
                 self.warned[user.id] = now
 
                 embed = discord.Embed(
-                    title="## ⚠️ Aviso de flood",
+                    title="⚠️ Aviso de flood",
                     description="\u200b\n"
                                 f"**{user.mention}, si continúas haciendo spam recibirás `{cfg['action']}`**",
                     color=discord.Color.orange()
@@ -669,7 +669,7 @@ class AntiSpamCog(commands.Cog):
                         self.warned[user.id] = now
 
                         embed = discord.Embed(
-                            title="## ⚠️ Aviso de repetición",
+                            title="⚠️ Aviso de repetición",
                             description="\u200b\n"
                                         f"**{user.mention}, si continúas repitiendo mensajes recibirás `{cfg['action']}`**",
                             color=discord.Color.orange()
@@ -691,7 +691,7 @@ class AntiSpamCog(commands.Cog):
                         self.warned[user.id] = now
 
                         embed = discord.Embed(
-                            title="## ⚠️ Aviso de mayúsculas",
+                            title="⚠️ Aviso de mayúsculas",
                             description="\u200b\n"
                                         f"**{user.mention}, si continúas usando mayúsculas recibirás `{cfg['action']}`**",
                             color=discord.Color.orange()
@@ -741,7 +741,7 @@ class AntiSpamCog(commands.Cog):
         # Warn
         if action == "warn":
             embed = discord.Embed(
-                title="## ⚠️ Aviso",
+                title="⚠️ Aviso",
                 description="\u200b\n"
                             f"**{user.mention}, evita hacer spam ({reason}).**",
                 color=discord.Color.orange()
@@ -781,7 +781,7 @@ class AntiSpamCog(commands.Cog):
                 pass
 
             embed = discord.Embed(
-                title="## ⛔ Usuario muteado",
+                title="⛔ Usuario muteado",
                 description="\u200b\n"
                             f"**{user.mention}, has sido muteado por `{duration}` segundos por spam.**",
                 color=discord.Color.red()
