@@ -163,50 +163,56 @@ class AntiSpamCog(commands.Cog):
         )
 
     # ============================
-# BOTONES (renombrados)
+# BOTONES (CORREGIDOS)
 # ============================
 
-def spam_main_buttons(self, guild_id, page):
-    enabled = self.config[guild_id]["enabled"]
+        # Activar / desactivar Anti-Spam
+        if custom_id == "spam_toggle_enabled":
+            cfg["enabled"] = not cfg["enabled"]
+            save_antispam(self.config)
+            return await self.spam_update_panel(interaction, page)
 
-    btn_enable = discord.ui.Button(
-        label="🟢 Activar Anti‑Spam" if not enabled else "🔴 Desactivar Anti‑Spam",
-        style=discord.ButtonStyle.green if not enabled else discord.ButtonStyle.red,
-        custom_id="spam_toggle_enabled"
-    )
+        # Modo progresivo
+        if custom_id == "spam_toggle_progressive":
+            cfg["progressive"] = not cfg["progressive"]
+            save_antispam(self.config)
+            return await self.spam_update_panel(interaction, page)
 
-    btn_save = discord.ui.Button(
-        label="💾 Guardar",
-        style=discord.ButtonStyle.blurple,
-        custom_id="spam_save_antispam"
-    )
+        # Toggle mayúsculas
+        if custom_id == "spam_toggle_caps":
+            cfg["caps"]["enabled"] = not cfg["caps"]["enabled"]
+            save_antispam(self.config)
+            return await self.spam_update_panel(interaction, page)
 
-    btn_test = None
-    if page == 6:
-        btn_test = discord.ui.Button(
-            label="🧪 Test Anti‑Spam",
-            style=discord.ButtonStyle.blurple,
-            custom_id="spam_test_antispam"
-        )
+        # Toggle repetición
+        if custom_id == "spam_toggle_repeat":
+            cfg["repeat"]["enabled"] = not cfg["repeat"]["enabled"]
+            save_antispam(self.config)
+            return await self.spam_update_panel(interaction, page)
 
-    return btn_enable, btn_save, btn_test
+        # Guardar manual
+        if custom_id == "spam_save_antispam":
+            save_antispam(self.config)
+            return await interaction.response.send_message("💾 Configuración guardada.", ephemeral=True)
 
+        # Página anterior
+        if custom_id == "spam_prev_page":
+            page = max(1, page - 1)
+            self.user_pages[user.id] = page
+            return await self.spam_update_panel(interaction, page)
 
-def spam_nav_buttons(self, page):
-    buttons = []
-    if page > 1:
-        buttons.append(discord.ui.Button(
-            label="⬅️ Anterior",
-            style=discord.ButtonStyle.secondary,
-            custom_id="spam_prev_page"
-        ))
-    if page < 6:
-        buttons.append(discord.ui.Button(
-            label="➡️ Siguiente",
-            style=discord.ButtonStyle.secondary,
-            custom_id="spam_next_page"
-        ))
-    return buttons
+        # Página siguiente
+        if custom_id == "spam_next_page":
+            page = min(6, page + 1)
+            self.user_pages[user.id] = page
+            return await self.spam_update_panel(interaction, page)
+
+        # Test Anti-Spam
+        if custom_id == "spam_test_antispam":
+            return await interaction.response.send_message(
+                "🧪 Test enviado. Envía mensajes para probar el Anti‑Spam.",
+                ephemeral=True
+            )
     # ============================
     # PANEL (renombrado)
     # ============================
