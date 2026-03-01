@@ -37,6 +37,38 @@ class AntiLinksCog(commands.Cog):
         self.user_pages = {}
 
     # ============================
+    # COMANDO PRINCIPAL /antilinks
+    # ============================
+
+    @app_commands.command(
+        name="antilinks",
+        description="Abre el panel de configuración Anti‑Links"
+    )
+    async def antilinks_cmd(self, interaction: discord.Interaction):
+
+        guild = interaction.guild
+        guild_id = str(guild.id)
+
+        # Crear config si no existe
+        if guild_id not in self.config:
+            self.config[guild_id] = {
+                "enabled": False,
+                "allowed_roles": [],
+                "whitelist_users": [],
+                "whitelist_roles": [],
+                "whitelist_domains": [],
+                "allowed_servers": [],
+                "block_shorteners": True,
+                "block_obfuscated": True
+            }
+            save_antilinks(self.config)
+
+        # Guardar página del usuario
+        self.user_pages[interaction.user.id] = 1
+
+        await self.build_panel(interaction, page=1)
+
+    # ============================
     # Embeds por página
     # ============================
 
@@ -92,7 +124,7 @@ class AntiLinksCog(commands.Cog):
             )
 
     # ============================
-    # SELECTS (CORREGIDOS)
+    # SELECTS (TU SISTEMA)
     # ============================
 
     def select_roles_allowed(self, guild: discord.Guild, guild_id: str):
@@ -107,13 +139,11 @@ class AntiLinksCog(commands.Cog):
             for role in guild.roles if role.name != "@everyone"
         ]
 
-        options = options[:25]
-
         return discord.ui.Select(
             placeholder="Selecciona roles autorizados",
             min_values=0,
             max_values=min(len(options), 25),
-            options=options,
+            options=options[:25],
             custom_id="select_allowed_roles"
         )
 
@@ -129,13 +159,11 @@ class AntiLinksCog(commands.Cog):
             for member in guild.members
         ]
 
-        options = options[:25]
-
         return discord.ui.Select(
             placeholder="Selecciona usuarios permitidos",
             min_values=0,
             max_values=min(len(options), 25),
-            options=options,
+            options=options[:25],
             custom_id="select_whitelist_users"
         )
 
@@ -151,13 +179,11 @@ class AntiLinksCog(commands.Cog):
             for role in guild.roles if role.name != "@everyone"
         ]
 
-        options = options[:25]
-
         return discord.ui.Select(
             placeholder="Selecciona roles permitidos",
             min_values=0,
             max_values=min(len(options), 25),
-            options=options,
+            options=options[:25],
             custom_id="select_whitelist_roles"
         )
 
@@ -173,13 +199,11 @@ class AntiLinksCog(commands.Cog):
             for domain in domains
         ]
 
-        options = options[:25]
-
         return discord.ui.Select(
             placeholder="Selecciona dominios permitidos",
             min_values=0,
             max_values=min(len(options), 25),
-            options=options,
+            options=options[:25],
             custom_id="select_whitelist_domains"
         )
 
@@ -195,19 +219,149 @@ class AntiLinksCog(commands.Cog):
             for server_id in servers
         ]
 
-        options = options[:25]
-
         return discord.ui.Select(
             placeholder="Selecciona servidores aliados",
             min_values=0,
             max_values=min(len(options), 25),
-            options=options,
+            options=options[:25],
             custom_id="select_allowed_servers"
         )
 
 
 
-    
+# ============================
+    # BOTONES PRINCIPALES
+    # ============================
+
+    def main_buttons(self, guild_id: str, page: int):
+        enabled = self.config[guild_id]["enabled"]
+
+        btn_enable = discord.ui.Button(
+            label="Desactivar" if enabled else "Activar",
+            style=discord.ButtonStyle.green if not enabled else discord.ButtonStyle.red,
+            custom_id="toggle_enabled"
+        )
+
+        btn_save = discord.ui.Button(
+            label="Guardar",
+            style=discord.ButtonStyle.blurple,
+            custom_id="save_antilinks"
+        )
+
+        btn_test = None
+        if page == 6:
+            btn_test = discord.ui.Button(
+                label="Test",
+                style=discord.ButtonStyle.gray,
+                custom_id="test_antilinks"
+            )
+
+        return btn_enable, btn_save, btn_test
+
+    # ============================
+    # BOTONES DE NAVEGACIÓN
+    # ============================
+
+    def nav_buttons(self, page: int):
+        buttons = []
+
+        if page > 1:
+            buttons.append(discord.ui.Button(
+                label="⬅️",
+                style=discord.ButtonStyle.secondary,
+                custom_id="prev_page"
+            ))
+
+        if page < 6:
+            buttons.append(discord.ui.Button(
+                label="➡️",
+                style=discord.ButtonStyle.secondary,
+                custom_id="next_page"
+            ))
+
+        return buttons
+
+    # ============================
+    # PANEL PRINCIPAL
+    # ============================
+
+    async def build_panel(self, interaction: discord.Interaction, page: int):
+        guild = interaction.guild
+        guild_id = str(guild.id)
+
+        embed = self.embed_page(page)
+        view = discord.ui.View(timeout=300)
+
+        # Página 1
+        if page == 1:
+            view.add_item(self.select_roles_allowed(guild, guild_id))
+            btn_enable, btn_save, _ = self.main_buttons(guild_id, page)
+            view.add_item(btn_enable)
+            view.add_item(btn_save)
+
+        # Página 2
+        elif page == 2:
+            view.add_item(self.select_whitelist_users(guild, guild_id))
+            btn_enable, btn_save, _ = self.main_buttons(guild_id, page)
+            view.add_item(btn_enable)
+            view.add_item(btn_save)
+
+        # Página 3
+        elif page == 3:
+            view.add_item(self.select_whitelist_roles(guild, guild_id))
+            btn_enable, btn_save, _ = self.main_buttons(guild_id, page)
+            view.add_item(btn_enable)
+            view.add_item(btn_save)
+
+        # Página 4
+        elif page == 4:
+            domains = self.config[guild_id]["whitelist_domains"]
+            embed.add_field(
+                name="Dominios permitidos",
+                value="\n".join(domains) if domains else "Ninguno",
+                inline=False
+            )
+            btn_enable, btn_save, _ = self.main_buttons(guild_id, page)
+            view.add_item(btn_enable)
+            view.add_item(btn_save)
+
+        # Página 5
+        elif page == 5:
+            allies = self.config[guild_id]["allowed_servers"]
+            embed.add_field(
+                name="Servidores aliados",
+                value="\n".join(allies) if allies else "Ninguno",
+                inline=False
+            )
+            btn_enable, btn_save, _ = self.main_buttons(guild_id, page)
+            view.add_item(btn_enable)
+            view.add_item(btn_save)
+
+        # Página 6
+        elif page == 6:
+            config = self.config[guild_id]
+            embed.add_field(
+                name="Bloquear acortadores",
+                value="Sí" if config["block_shorteners"] else "No",
+                inline=False
+            )
+            embed.add_field(
+                name="Bloquear enlaces disfrazados",
+                value="Sí" if config["block_obfuscated"] else "No",
+                inline=False
+            )
+            btn_enable, btn_save, btn_test = self.main_buttons(guild_id, page)
+            view.add_item(btn_enable)
+            view.add_item(btn_save)
+            if btn_test:
+                view.add_item(btn_test)
+
+        # Navegación
+        for btn in self.nav_buttons(page):
+            view.add_item(btn)
+
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
     # ============================
     # LISTENER DE COMPONENTES
     # ============================
