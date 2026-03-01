@@ -338,7 +338,7 @@ class AntiSpamCog(commands.Cog):
 
 
 
-# ============================
+    # ============================
     # SLASH COMMAND
     # ============================
 
@@ -369,37 +369,37 @@ class AntiSpamCog(commands.Cog):
         await self.spam_build_panel(interaction, 1)
 
     # ============================
-    # INTERACCIONES (RENOMBRADO)
+    # INTERACCIONES (CORREGIDO)
     # ============================
 
     @commands.Cog.listener()
-async def on_interaction(self, interaction):
-    # Ignorar si no es un componente
-    if interaction.type != discord.InteractionType.component:
-        return
+    async def on_interaction(self, interaction):
+        # Ignorar si no es un componente
+        if interaction.type != discord.InteractionType.component:
+            return
 
-    custom_id = interaction.data.get("custom_id")
-    if not custom_id:
-        return
+        custom_id = interaction.data.get("custom_id")
+        if not custom_id:
+            return
 
-    # Filtrar SOLO los del Anti‑Spam
-    if not custom_id.startswith("spam_"):
-        return
+        # Filtrar SOLO los del Anti‑Spam
+        if not custom_id.startswith("spam_"):
+            return
 
-    guild = interaction.guild
-    guild_id = str(guild.id)
-    user = interaction.user
+        guild = interaction.guild
+        guild_id = str(guild.id)
+        user = interaction.user
 
-    # Solo el dueño del panel
-    if guild_id in self.panel_owner and user.id != self.panel_owner[guild_id]:
-        if not interaction.response.is_done():
-            await interaction.response.send_message("❌ Solo quien abrió el panel puede usarlo.", ephemeral=True)
-        else:
-            await interaction.followup.send("❌ Solo quien abrió el panel puede usarlo.", ephemeral=True)
-        return
+        # Solo el dueño del panel
+        if guild_id in self.panel_owner and user.id != self.panel_owner[guild_id]:
+            if not interaction.response.is_done():
+                await interaction.response.send_message("❌ Solo quien abrió el panel puede usarlo.", ephemeral=True)
+            else:
+                await interaction.followup.send("❌ Solo quien abrió el panel puede usarlo.", ephemeral=True)
+            return
 
-    page = self.user_pages.get(user.id, 1)
-    cfg = self.ensure_guild_config(guild_id)
+        page = self.user_pages.get(user.id, 1)
+        cfg = self.ensure_guild_config(guild_id)
         # ============================
         # CERRAR PANEL
         # ============================
