@@ -249,7 +249,8 @@ class AntiLinksCog(commands.Cog):
     # ============================
 
     def main_buttons(self, guild_id: str, page: int):
-        enabled = self.config[guild_id]["enabled"]
+        cfg = self.ensure_guild_config(guild_id)
+        enabled = cfg["enabled"]
 
         btn_enable = discord.ui.Button(
             label="Desactivar" if enabled else "Activar",
@@ -303,6 +304,7 @@ class AntiLinksCog(commands.Cog):
     async def build_panel(self, interaction: discord.Interaction, page: int):
         guild = interaction.guild
         guild_id = str(guild.id)
+        cfg = self.ensure_guild_config(guild_id)
 
         embed = self.embed_page(page)
         view = discord.ui.View(timeout=300)
@@ -330,7 +332,7 @@ class AntiLinksCog(commands.Cog):
 
         # Página 4
         elif page == 4:
-            domains = self.config[guild_id]["whitelist_domains"]
+            domains = cfg["whitelist_domains"]
             embed.add_field(
                 name="Dominios permitidos",
                 value="\n".join(domains) if domains else "Ninguno",
@@ -342,7 +344,7 @@ class AntiLinksCog(commands.Cog):
 
         # Página 5
         elif page == 5:
-            allies = self.config[guild_id]["allowed_servers"]
+            allies = cfg["allowed_servers"]
             embed.add_field(
                 name="Servidores aliados",
                 value="\n".join(allies) if allies else "Ninguno",
@@ -354,15 +356,14 @@ class AntiLinksCog(commands.Cog):
 
         # Página 6
         elif page == 6:
-            config = self.config[guild_id]
             embed.add_field(
                 name="Bloquear acortadores",
-                value="Sí" if config["block_shorteners"] else "No",
+                value="Sí" if cfg["block_shorteners"] else "No",
                 inline=False
             )
             embed.add_field(
                 name="Bloquear enlaces disfrazados",
-                value="Sí" if config["block_obfuscated"] else "No",
+                value="Sí" if cfg["block_obfuscated"] else "No",
                 inline=False
             )
             btn_enable, btn_save, btn_test = self.main_buttons(guild_id, page)
@@ -395,6 +396,7 @@ class AntiLinksCog(commands.Cog):
 
         page = self.user_pages[user_id]
         guild_id = str(interaction.guild.id)
+        cfg = self.ensure_guild_config(guild_id)
 
         # Navegación
         if custom_id == "next_page":
@@ -409,8 +411,7 @@ class AntiLinksCog(commands.Cog):
 
         # Activar / Desactivar
         if custom_id == "toggle_enabled":
-            current = self.config[guild_id]["enabled"]
-            self.config[guild_id]["enabled"] = not current
+            cfg["enabled"] = not cfg["enabled"]
             save_antilinks(self.config)
             return await self.update_panel(interaction, page)
 
@@ -432,21 +433,21 @@ class AntiLinksCog(commands.Cog):
         # Select: roles autorizados
         if custom_id == "select_allowed_roles":
             selected = interaction.data.get("values", [])
-            self.config[guild_id]["allowed_roles"] = [int(r) for r in selected]
+            cfg["allowed_roles"] = [int(r) for r in selected]
             save_antilinks(self.config)
             return await self.update_panel(interaction, page)
 
         # Select: whitelist usuarios
         if custom_id == "select_whitelist_users":
             selected = interaction.data.get("values", [])
-            self.config[guild_id]["whitelist_users"] = [int(u) for u in selected]
+            cfg["whitelist_users"] = [int(u) for u in selected]
             save_antilinks(self.config)
             return await self.update_panel(interaction, page)
 
         # Select: whitelist roles
         if custom_id == "select_whitelist_roles":
             selected = interaction.data.get("values", [])
-            self.config[guild_id]["whitelist_roles"] = [int(r) for r in selected]
+            cfg["whitelist_roles"] = [int(r) for r in selected]
             save_antilinks(self.config)
             return await self.update_panel(interaction, page)
 
@@ -457,6 +458,7 @@ class AntiLinksCog(commands.Cog):
     async def update_panel(self, interaction: discord.Interaction, page: int):
         guild = interaction.guild
         guild_id = str(guild.id)
+        cfg = self.ensure_guild_config(guild_id)
 
         view = discord.ui.View(timeout=300)
         embed = self.embed_page(page)
@@ -484,7 +486,7 @@ class AntiLinksCog(commands.Cog):
 
         # Página 4
         elif page == 4:
-            domains = self.config[guild_id]["whitelist_domains"]
+            domains = cfg["whitelist_domains"]
             embed.add_field(
                 name="Dominios permitidos",
                 value="\n".join(domains) if domains else "Ninguno",
@@ -496,7 +498,7 @@ class AntiLinksCog(commands.Cog):
 
         # Página 5
         elif page == 5:
-            allies = self.config[guild_id]["allowed_servers"]
+            allies = cfg["allowed_servers"]
             embed.add_field(
                 name="Servidores aliados",
                 value="\n".join(allies) if allies else "Ninguno",
@@ -508,15 +510,14 @@ class AntiLinksCog(commands.Cog):
 
         # Página 6
         elif page == 6:
-            config = self.config[guild_id]
             embed.add_field(
                 name="Bloquear acortadores",
-                value="Sí" if config["block_shorteners"] else "No",
+                value="Sí" if cfg["block_shorteners"] else "No",
                 inline=False
             )
             embed.add_field(
                 name="Bloquear enlaces disfrazados",
-                value="Sí" if config["block_obfuscated"] else "No",
+                value="Sí" if cfg["block_obfuscated"] else "No",
                 inline=False
             )
             btn_enable, btn_save, btn_test = self.main_buttons(guild_id, page)
@@ -530,6 +531,7 @@ class AntiLinksCog(commands.Cog):
             view.add_item(btn)
 
         await interaction.response.edit_message(embed=embed, view=view)
+
 
     # ============================
     # DETECCIÓN DE LINKS
