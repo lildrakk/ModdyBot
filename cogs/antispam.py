@@ -163,42 +163,50 @@ class AntiSpamCog(commands.Cog):
         )
 
     # ============================
-    # BOTONES (renombrados)
-    # ============================
+# BOTONES (renombrados)
+# ============================
 
-    def spam_main_buttons(self, guild_id, page):
-        enabled = self.config[guild_id]["enabled"]
+def spam_main_buttons(self, guild_id, page):
+    enabled = self.config[guild_id]["enabled"]
 
-        btn_enable = discord.ui.Button(
-            label="🟢 Activar Anti‑Spam" if not enabled else "🔴 Desactivar Anti‑Spam",
-            style=discord.ButtonStyle.green if not enabled else discord.ButtonStyle.red,
-            custom_id="spam_toggle_enabled"
-        )
+    btn_enable = discord.ui.Button(
+        label="🟢 Activar Anti‑Spam" if not enabled else "🔴 Desactivar Anti‑Spam",
+        style=discord.ButtonStyle.green if not enabled else discord.ButtonStyle.red,
+        custom_id="spam_toggle_enabled"
+    )
 
-        btn_save = discord.ui.Button(
-            label="💾 Guardar",
+    btn_save = discord.ui.Button(
+        label="💾 Guardar",
+        style=discord.ButtonStyle.blurple,
+        custom_id="spam_save_antispam"
+    )
+
+    btn_test = None
+    if page == 6:
+        btn_test = discord.ui.Button(
+            label="🧪 Test Anti‑Spam",
             style=discord.ButtonStyle.blurple,
-            custom_id="spam_save_antispam"
+            custom_id="spam_test_antispam"
         )
 
-        btn_test = None
-        if page == 6:
-            btn_test = discord.ui.Button(
-                label="🧪 Test Anti‑Spam",
-                style=discord.ButtonStyle.blurple,
-                custom_id="spam_test_antispam"
-            )
+    return btn_enable, btn_save, btn_test
 
-        return btn_enable, btn_save, btn_test
 
-    def spam_nav_buttons(self, page):
-        buttons = []
-        if page > 1:
-            buttons.append(discord.ui.Button(label="⬅️ Anterior", style=discord.ButtonStyle.secondary, custom_id="spam_prev_page"))
-        if page < 6:
-            buttons.append(discord.ui.Button(label="➡️ Siguiente", style=discord.ButtonStyle.secondary, custom_id="spam_next_page"))
-        return buttons
-
+def spam_nav_buttons(self, page):
+    buttons = []
+    if page > 1:
+        buttons.append(discord.ui.Button(
+            label="⬅️ Anterior",
+            style=discord.ButtonStyle.secondary,
+            custom_id="spam_prev_page"
+        ))
+    if page < 6:
+        buttons.append(discord.ui.Button(
+            label="➡️ Siguiente",
+            style=discord.ButtonStyle.secondary,
+            custom_id="spam_next_page"
+        ))
+    return buttons
     # ============================
     # PANEL (renombrado)
     # ============================
