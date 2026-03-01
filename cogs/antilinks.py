@@ -59,14 +59,66 @@ class AntiLinksCog(commands.Cog):
                 "whitelist_domains": [],
                 "allowed_servers": [],
                 "block_shorteners": True,
-                "block_obfuscated": True
+                "block_obfuscated": True,
+                "manage_role": 0   # NUEVO: rol que puede usar /antilinks
             }
             save_antilinks(self.config)
+
+        # PERMISOS
+        manage_role = self.config[guild_id].get("manage_role", 0)
+
+        es_admin = interaction.user.guild_permissions.administrator
+        tiene_rol = any(role.id == manage_role for role in interaction.user.roles)
+
+        if not es_admin and not tiene_rol:
+            return await interaction.response.send_message(
+                "❌ No tienes permisos para usar este comando.",
+                ephemeral=True
+            )
 
         # Guardar página del usuario
         self.user_pages[interaction.user.id] = 1
 
         await self.build_panel(interaction, page=1)
+
+
+    # ============================
+    #  ROL QUE PUEDE USAR /antilinks
+    # ============================
+
+    @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.command(
+        name="antilinks_setrole",
+        description="Establece el rol que puede usar /antilinks en este servidor"
+    )
+    @app_commands.describe(
+        rol="Rol que podrá usar /antilinks"
+    )
+    async def antilinks_setrole(self, interaction: discord.Interaction, rol: discord.Role):
+
+        guild_id = str(interaction.guild.id)
+
+        # Crear config si no existe
+        if guild_id not in self.config:
+            self.config[guild_id] = {
+                "enabled": False,
+                "allowed_roles": [],
+                "whitelist_users": [],
+                "whitelist_roles": [],
+                "whitelist_domains": [],
+                "allowed_servers": [],
+                "block_shorteners": True,
+                "block_obfuscated": True,
+                "manage_role": 0
+            }
+
+        self.config[guild_id]["manage_role"] = rol.id
+        save_antilinks(self.config)
+
+        await interaction.response.send_message(
+            f"🔐 El rol {rol.mention} ahora puede usar `/antilinks`.",
+            ephemeral=True
+        )
 
     # ============================
     # Embeds por página
