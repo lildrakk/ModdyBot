@@ -373,29 +373,33 @@ class AntiSpamCog(commands.Cog):
     # ============================
 
     @commands.Cog.listener()
-    async def on_interaction_spam(self, interaction):
-        if interaction.type != discord.InteractionType.component:
-            return
+async def on_interaction(self, interaction):
+    # Ignorar si no es un componente
+    if interaction.type != discord.InteractionType.component:
+        return
 
-        custom_id = interaction.data.get("custom_id")
-        if not custom_id or not custom_id.startswith("spam_"):
-            return  # Ignorar todo lo que no sea del Anti‑Spam
+    custom_id = interaction.data.get("custom_id")
+    if not custom_id:
+        return
 
-        guild = interaction.guild
-        guild_id = str(guild.id)
-        user = interaction.user
+    # Filtrar SOLO los del Anti‑Spam
+    if not custom_id.startswith("spam_"):
+        return
 
-        # Solo el dueño del panel
-        if guild_id in self.panel_owner and user.id != self.panel_owner[guild_id]:
-            if not interaction.response.is_done():
-                await interaction.response.send_message("❌ Solo quien abrió el panel puede usarlo.", ephemeral=True)
-            else:
-                await interaction.followup.send("❌ Solo quien abrió el panel puede usarlo.", ephemeral=True)
-            return
+    guild = interaction.guild
+    guild_id = str(guild.id)
+    user = interaction.user
 
-        page = self.user_pages.get(user.id, 1)
-        cfg = self.ensure_guild_config(guild_id)
+    # Solo el dueño del panel
+    if guild_id in self.panel_owner and user.id != self.panel_owner[guild_id]:
+        if not interaction.response.is_done():
+            await interaction.response.send_message("❌ Solo quien abrió el panel puede usarlo.", ephemeral=True)
+        else:
+            await interaction.followup.send("❌ Solo quien abrió el panel puede usarlo.", ephemeral=True)
+        return
 
+    page = self.user_pages.get(user.id, 1)
+    cfg = self.ensure_guild_config(guild_id)
         # ============================
         # CERRAR PANEL
         # ============================
