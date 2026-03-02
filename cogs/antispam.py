@@ -103,7 +103,7 @@ class AntiSpamCog(commands.Cog):
         )
 
     # ============================
-    # SELECTS (renombrados)
+    # SELECTS
     # ============================
 
     def spam_select_allowed_roles(self, guild, guild_id):
@@ -163,58 +163,7 @@ class AntiSpamCog(commands.Cog):
         )
 
     # ============================
-# BOTONES (CORREGIDOS)
-# ============================
-
-        # Activar / desactivar Anti-Spam
-        if custom_id == "spam_toggle_enabled":
-            cfg["enabled"] = not cfg["enabled"]
-            save_antispam(self.config)
-            return await self.spam_update_panel(interaction, page)
-
-        # Modo progresivo
-        if custom_id == "spam_toggle_progressive":
-            cfg["progressive"] = not cfg["progressive"]
-            save_antispam(self.config)
-            return await self.spam_update_panel(interaction, page)
-
-        # Toggle mayúsculas
-        if custom_id == "spam_toggle_caps":
-            cfg["caps"]["enabled"] = not cfg["caps"]["enabled"]
-            save_antispam(self.config)
-            return await self.spam_update_panel(interaction, page)
-
-        # Toggle repetición
-        if custom_id == "spam_toggle_repeat":
-            cfg["repeat"]["enabled"] = not cfg["repeat"]["enabled"]
-            save_antispam(self.config)
-            return await self.spam_update_panel(interaction, page)
-
-        # Guardar manual
-        if custom_id == "spam_save_antispam":
-            save_antispam(self.config)
-            return await interaction.response.send_message("💾 Configuración guardada.", ephemeral=True)
-
-        # Página anterior
-        if custom_id == "spam_prev_page":
-            page = max(1, page - 1)
-            self.user_pages[user.id] = page
-            return await self.spam_update_panel(interaction, page)
-
-        # Página siguiente
-        if custom_id == "spam_next_page":
-            page = min(6, page + 1)
-            self.user_pages[user.id] = page
-            return await self.spam_update_panel(interaction, page)
-
-        # Test Anti-Spam
-        if custom_id == "spam_test_antispam":
-            return await interaction.response.send_message(
-                "🧪 Test enviado. Envía mensajes para probar el Anti‑Spam.",
-                ephemeral=True
-            )
-    # ============================
-    # PANEL (renombrado)
+    # PANEL
     # ============================
 
     async def spam_build_panel(self, interaction, page):
@@ -226,7 +175,6 @@ class AntiSpamCog(commands.Cog):
         embed = self.spam_embed_page(page)
         view = discord.ui.View(timeout=300)
 
-        # Botón cerrar panel
         view.add_item(discord.ui.Button(label="🔒 Cerrar panel", style=discord.ButtonStyle.red, custom_id="spam_close_panel"))
 
         # Página 1
@@ -350,8 +298,6 @@ class AntiSpamCog(commands.Cog):
     async def spam_update_panel(self, interaction, page):
         await self.spam_build_panel(interaction, page)
 
-
-
     # ============================
     # SLASH COMMAND
     # ============================
@@ -366,7 +312,6 @@ class AntiSpamCog(commands.Cog):
         guild_id = str(guild.id)
         cfg = self.ensure_guild_config(guild_id)
 
-        # Permisos
         if not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message(
                 "❌ Solo administradores pueden usar este comando.",
@@ -383,28 +328,22 @@ class AntiSpamCog(commands.Cog):
         await self.spam_build_panel(interaction, 1)
 
     # ============================
-    # INTERACCIONES (CORREGIDO)
+    # INTERACCIONES
     # ============================
 
     @commands.Cog.listener()
     async def on_interaction(self, interaction):
-        # Ignorar si no es un componente
         if interaction.type != discord.InteractionType.component:
             return
 
         custom_id = interaction.data.get("custom_id")
-        if not custom_id:
-            return
-
-        # Filtrar SOLO los del Anti‑Spam
-        if not custom_id.startswith("spam_"):
+        if not custom_id or not custom_id.startswith("spam_"):
             return
 
         guild = interaction.guild
         guild_id = str(guild.id)
         user = interaction.user
 
-        # Solo el dueño del panel
         if guild_id in self.panel_owner and user.id != self.panel_owner[guild_id]:
             if not interaction.response.is_done():
                 await interaction.response.send_message("❌ Solo quien abrió el panel puede usarlo.", ephemeral=True)
@@ -414,6 +353,7 @@ class AntiSpamCog(commands.Cog):
 
         page = self.user_pages.get(user.id, 1)
         cfg = self.ensure_guild_config(guild_id)
+
         # ============================
         # CERRAR PANEL
         # ============================
@@ -432,14 +372,16 @@ class AntiSpamCog(commands.Cog):
                 pass
             return
 
-# ============================
-        # MODALS (CORREGIDOS)
+
+
+        # ============================
+        # MODALS
         # ============================
 
         class SpamModal(discord.ui.Modal):
             def __init__(self, cog, title, label, cb):
                 super().__init__(title=title)
-                self.cog = cog          # referencia correcta al COG
+                self.cog = cog
                 self.cb = cb
                 self.input = discord.ui.TextInput(label=label, required=True)
                 self.add_item(self.input)
@@ -531,8 +473,6 @@ class AntiSpamCog(commands.Cog):
                 SpamModal(self, "Cambiar cooldown", "Segundos:", cb)
             )
 
-  
-
         # ============================
         # ACCIONES QUE SOLO ACTUALIZAN PANEL
         # ============================
@@ -613,196 +553,181 @@ class AntiSpamCog(commands.Cog):
                 await interaction.followup.send("🧪 Test Anti‑Spam activado.", ephemeral=True)
             return
 
-    # ============================
-    # DETECCIÓN DE SPAM
-    # ============================
 
-    @commands.Cog.listener()
-    async def on_message(self, message: discord.Message):
-        if not message.guild or message.author.bot:
-            return
+# ============================
+        # DETECCIÓN DE SPAM
+        # ============================
 
-        guild_id = str(message.guild.id)
-        if guild_id not in self.config:
-            return
+        @commands.Cog.listener()
+        async def on_message(self, message: discord.Message):
+            if not message.guild or message.author.bot:
+                return
 
-        cfg = self.config[guild_id]
-        if not cfg["enabled"]:
-            return
+            guild_id = str(message.guild.id)
+            if guild_id not in self.config:
+                return
 
-        user = message.author
-        content = message.content
-        now = time.time()
+            cfg = self.config[guild_id]
+            if not cfg["enabled"]:
+                return
 
-        # Whitelist
-        if user.id in cfg["whitelist_users"]:
-            return
-        if any(r.id in cfg["whitelist_roles"] for r in user.roles):
-            return
-        if message.channel.id in cfg["whitelist_channels"]:
-            return
+            user = message.author
+            content = message.content
+            now = time.time()
 
-        # Cooldown
-        if user.id in self.cooldowns and now - self.cooldowns[user.id] < cfg["cooldown"]:
-            return
-        self.cooldowns[user.id] = now
+            # Whitelist
+            if user.id in cfg["whitelist_users"]:
+                return
+            if any(r.id in cfg["whitelist_roles"] for r in user.roles):
+                return
+            if message.channel.id in cfg["whitelist_channels"]:
+                return
 
-        # Flood tracking
-        if user.id not in self.user_messages:
-            self.user_messages[user.id] = []
+            # Cooldown
+            if user.id in self.cooldowns and now - self.cooldowns[user.id] < cfg["cooldown"]:
+                return
+            self.cooldowns[user.id] = now
 
-        self.user_messages[user.id].append((now, content))
+            # Flood tracking
+            if user.id not in self.user_messages:
+                self.user_messages[user.id] = []
 
-        interval = cfg["flood"]["interval"]
-        self.user_messages[user.id] = [(t, msg) for t, msg in self.user_messages[user.id] if now - t <= interval]
+            self.user_messages[user.id].append((now, content))
 
-        # Flood detectado
-        if len(self.user_messages[user.id]) >= cfg["flood"]["max_messages"]:
-            if user.id not in self.warned or now - self.warned[user.id] > interval:
-                self.warned[user.id] = now
+            interval = cfg["flood"]["interval"]
+            self.user_messages[user.id] = [(t, msg) for t, msg in self.user_messages[user.id] if now - t <= interval]
 
+            # Flood detectado
+            if len(self.user_messages[user.id]) >= cfg["flood"]["max_messages"]:
+                if user.id not in self.warned or now - self.warned[user.id] > interval:
+                    self.warned[user.id] = now
+
+                    embed = discord.Embed(
+                        title="⚠️ Aviso de flood",
+                        description="\u200b\n"
+                                    f"**{user.mention}, si continúas haciendo spam recibirás `{cfg['action']}`**",
+                        color=discord.Color.orange()
+                    )
+
+                    await message.channel.send(embed=embed, delete_after=5)
+                    return
+
+                return await self.apply_action(message, "flood")
+
+            # Repetición
+            if cfg["repeat"]["enabled"]:
+                msgs = [msg for _, msg in self.user_messages[user.id]]
+                if len(msgs) >= cfg["repeat"]["max_repeat"]:
+                    last_n = msgs[-cfg["repeat"]["max_repeat"]:]
+                    if len(set(last_n)) == 1:
+                        if user.id not in self.warned or now - self.warned[user.id] > interval:
+                            self.warned[user.id] = now
+
+                            embed = discord.Embed(
+                                title="⚠️ Aviso de repetición",
+                                description="\u200b\n"
+                                            f"**{user.mention}, si continúas repitiendo mensajes recibirás `{cfg['action']}`**",
+                                color=discord.Color.orange()
+                            )
+
+                            await message.channel.send(embed=embed, delete_after=5)
+                            return
+
+                        return await self.apply_action(message, "repeat")
+
+            # Mayúsculas
+            if cfg["caps"]["enabled"]:
+                letters = [c for c in content if c.isalpha()]
+                if letters:
+                    caps = sum(1 for c in letters if c.isupper())
+                    percent = (caps / len(letters)) * 100
+                    if percent >= cfg["caps"]["max_caps"]:
+                        if user.id not in self.warned or now - self.warned[user.id] > interval:
+                            self.warned[user.id] = now
+
+                            embed = discord.Embed(
+                                title="⚠️ Aviso de mayúsculas",
+                                description="\u200b\n"
+                                            f"**{user.mention}, si continúas usando mayúsculas recibirás `{cfg['action']}`**",
+                                color=discord.Color.orange()
+                            )
+
+                            await message.channel.send(embed=embed, delete_after=5)
+                            return
+
+                        return await self.apply_action(message, "caps")
+
+        # ============================
+        # APLICAR ACCIÓN
+        # ============================
+
+        async def apply_action(self, message: discord.Message, reason: str):
+            guild_id = str(message.guild.id)
+            cfg = self.config[guild_id]
+            action = cfg["action"]
+            user = message.author
+
+            # Borrar mensaje
+            try:
+                await message.delete()
+            except:
+                pass
+
+            # Acción delete
+            if action == "delete":
+                return
+
+            # Warn
+            if action == "warn":
                 embed = discord.Embed(
-                    title="⚠️ Aviso de flood",
+                    title="⚠️ Aviso",
                     description="\u200b\n"
-                                f"**{user.mention}, si continúas haciendo spam recibirás `{cfg['action']}`**",
+                                f"**{user.mention}, evita hacer spam ({reason}).**",
                     color=discord.Color.orange()
                 )
 
                 await message.channel.send(embed=embed, delete_after=5)
                 return
 
-            return await self.apply_action(message, "flood")
+            # Kick
+            if action == "kick":
+                try:
+                    await user.kick(reason=f"Anti‑Spam ({reason})")
+                except:
+                    pass
+                return
 
-        # Repetición
-        if cfg["repeat"]["enabled"]:
-            msgs = [msg for _, msg in self.user_messages[user.id]]
-            if len(msgs) >= cfg["repeat"]["max_repeat"]:
-                last_n = msgs[-cfg["repeat"]["max_repeat"]:]
-                if len(set(last_n)) == 1:
-                    if user.id not in self.warned or now - self.warned[user.id] > interval:
-                        self.warned[user.id] = now
+            # Ban
+            if action == "ban":
+                try:
+                    await user.ban(reason=f"Anti‑Spam ({reason})")
+                except:
+                    pass
+                return
 
-                        embed = discord.Embed(
-                            title="⚠️ Aviso de repetición",
-                            description="\u200b\n"
-                                        f"**{user.mention}, si continúas repitiendo mensajes recibirás `{cfg['action']}`**",
-                            color=discord.Color.orange()
-                        )
+            # Mute (timeout)
+            if action == "mute":
+                duration = cfg["mute_time"]
+                if cfg["progressive"]:
+                    duration = min(duration * 2, 3600)
 
-                        await message.channel.send(embed=embed, delete_after=5)
-                        return
+                try:
+                    await user.timeout(
+                        discord.utils.utcnow() + timedelta(seconds=duration),
+                        reason=f"Anti‑Spam ({reason})"
+                    )
+                except:
+                    pass
 
-                    return await self.apply_action(message, "repeat")
-
-        # Mayúsculas
-        if cfg["caps"]["enabled"]:
-            letters = [c for c in content if c.isalpha()]
-            if letters:
-                caps = sum(1 for c in letters if c.isupper())
-                percent = (caps / len(letters)) * 100
-                if percent >= cfg["caps"]["max_caps"]:
-                    if user.id not in self.warned or now - self.warned[user.id] > interval:
-                        self.warned[user.id] = now
-
-                        embed = discord.Embed(
-                            title="⚠️ Aviso de mayúsculas",
-                            description="\u200b\n"
-                                        f"**{user.mention}, si continúas usando mayúsculas recibirás `{cfg['action']}`**",
-                            color=discord.Color.orange()
-                        )
-
-                        await message.channel.send(embed=embed, delete_after=5)
-                        return
-
-                    return await self.apply_action(message, "caps")# Mayúsculas
-        if cfg["caps"]["enabled"]:
-            letters = [c for c in content if c.isalpha()]
-            if letters:
-                caps = sum(1 for c in letters if c.isupper())
-                percent = (caps / len(letters)) * 100
-                if percent >= cfg["caps"]["max_caps"]:
-                    if user.id not in self.warned or now - self.warned[user.id] > interval:
-                        self.warned[user.id] = now
-                        await message.channel.send(
-                            f"{user.mention} ⚠️ Si continúas usando mayúsculas recibirás: **{cfg['action']}**",
-                            delete_after=5
-                        )
-                        return
-                    return await self.apply_action(message, "caps")
-
-
-
-# ============================
-    # APLICAR ACCIÓN
-    # ============================
-
-    async def apply_action(self, message: discord.Message, reason: str):
-        guild_id = str(message.guild.id)
-        cfg = self.config[guild_id]
-        action = cfg["action"]
-        user = message.author
-
-        # Borrar mensaje
-        try:
-            await message.delete()
-        except:
-            pass
-
-        # Acción delete
-        if action == "delete":
-            return
-
-        # Warn
-        if action == "warn":
-            embed = discord.Embed(
-                title="⚠️ Aviso",
-                description="\u200b\n"
-                            f"**{user.mention}, evita hacer spam ({reason}).**",
-                color=discord.Color.orange()
-            )
-
-            await message.channel.send(embed=embed, delete_after=5)
-            return
-
-        # Kick
-        if action == "kick":
-            try:
-                await user.kick(reason=f"Anti‑Spam ({reason})")
-            except:
-                pass
-            return
-
-        # Ban
-        if action == "ban":
-            try:
-                await user.ban(reason=f"Anti‑Spam ({reason})")
-            except:
-                pass
-            return
-
-        # Mute (timeout)
-        if action == "mute":
-            duration = cfg["mute_time"]
-            if cfg["progressive"]:
-                duration = min(duration * 2, 3600)
-
-            try:
-                await user.timeout(
-                    discord.utils.utcnow() + timedelta(seconds=duration),
-                    reason=f"Anti‑Spam ({reason})"
+                embed = discord.Embed(
+                    title="⛔ Usuario muteado",
+                    description="\u200b\n"
+                                f"**{user.mention}, has sido muteado por `{duration}` segundos por spam.**",
+                    color=discord.Color.red()
                 )
-            except:
-                pass
 
-            embed = discord.Embed(
-                title="⛔ Usuario muteado",
-                description="\u200b\n"
-                            f"**{user.mention}, has sido muteado por `{duration}` segundos por spam.**",
-                color=discord.Color.red()
-            )
-
-            await message.channel.send(embed=embed, delete_after=5)
-            return
+                await message.channel.send(embed=embed, delete_after=5)
+                return
 
 
 async def setup(bot: commands.Bot):
