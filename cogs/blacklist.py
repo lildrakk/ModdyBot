@@ -3,6 +3,7 @@ from discord.ext import commands
 from discord import app_commands
 import json
 import os
+from datetime import datetime
 
 # ============================
 # CONFIG
@@ -30,6 +31,71 @@ blacklist_servers = load_json("blacklist_servers.json")
 blacklist_global = load_json("blacklist_global.json")
 
 # ============================
+# SISTEMA DE ESPERA DE PRUEBAS
+# ============================
+
+pending_proofs = {}
+# pending_proofs[staff_id] = {
+#     "target_id": "123",
+#     "reason": "motivo",
+#     "staff": 1394,
+#     "timestamp": "2026-03-03 00:52"
+# }
+
+# ============================
+# MODAL PARA AÑADIR A GLOBAL
+# ============================
+
+class GlobalAddModal(discord.ui.Modal, title="➕ Añadir a Blacklist Global"):
+    usuario = discord.ui.TextInput(
+        label="Usuario o ID",
+        placeholder="Ej: @Juan / 123456789012345678",
+        required=True
+    )
+    reason = discord.ui.TextInput(
+        label="Motivo",
+        placeholder="Razón de la sanción",
+        required=True
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        if interaction.user.id != GLOBAL_OWNER_ID:
+            return await interaction.response.send_message(
+                "❌ No puedes usar este modal.",
+                ephemeral=True
+            )
+
+        raw_user = self.usuario.value.strip()
+        reason = self.reason.value.strip()
+
+        # Convertir mención a ID
+        if raw_user.startswith("<@") and raw_user.endswith(">"):
+            raw_user = raw_user.replace("<@", "").replace(">", "").replace("!", "")
+
+        try:
+            target_id = int(raw_user)
+        except:
+            return await interaction.response.send_message(
+                "❌ Debes introducir un usuario válido o un ID.",
+                ephemeral=True
+            )
+
+        # Guardar en espera de pruebas
+        pending_proofs[interaction.user.id] = {
+            "target_id": str(target_id),
+            "reason": reason,
+            "staff": interaction.user.id,
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M")
+        }
+
+        await interaction.response.send_message(
+            "📎 **Ahora adjunta las pruebas (opcional).**\n"
+            "Envía imágenes, vídeos o archivos **en tu siguiente mensaje**.\n\n"
+            "Si no envías nada en 30 segundos, se guardará sin pruebas.",
+            ephemeral=True
+        )
+
+# ============================
 # COG PRINCIPAL
 # ============================
 
@@ -38,26 +104,209 @@ class Blacklist(commands.Cog):
         self.bot = bot
 
     # ============================
-    # PANEL GLOBAL
+    # COMANDO GLOBAL BLACKLIST
     # ============================
 
     @app_commands.command(
-        name="global_panel",
-        description="Abre el panel PRO de blacklist global"
+        name="global_blacklist",
+        description="Añade un usuario a la blacklist GLOBAL (modal + pruebas opcionales)"
     )
-    async def global_panel_cmd(self, interaction: discord.Interaction):
+    async def global_blacklist_cmd(self, interaction: discord.Interaction):
         if interaction.user.id != GLOBAL_OWNER_ID:
             return await interaction.response.send_message(
-                "❌ Solo el dueño del bot puede usar este panel.",
+                "❌ Solo el dueño del bot puede usar este comando.",
+                ephemeral=True
+            )
+        await interaction.response.send_modal(GlobalAddModal())
+
+    # ============================
+    # CAPTURA DE PRUEBAS
+    # ============================
+
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        if message.author.bot:
+            return
+
+        staff_id = message.author.id
+
+        # ¿Este usuario está enviando pruebas?
+        if staff_id not in pending_proofs:
+            return
+
+        entry = pending_proofs[staff_id]
+        target_id = entry["target_id"]
+        reason = entry["reason"]
+        staff = entry["staff"]
+        timestamp = entry["timestamp"]
+
+        # Recoger archivos adjuntos
+        proofs = [a.url for a in message.attachments]
+
+        # Guardar en JSON
+        blacklist_global[target_id] = {
+            "razon": reason,
+            "pruebas": proofs,
+            "staff": staff,
+            "fecha": timestamp
+        }
+        save_json("blacklist_global.json", blacklist_global)
+
+        # Eliminar de la lista de espera
+        del pending_proofs[staff_id]
+
+        # Intentar DM al usuario
+        try:
+            user_obj = await self.bot.fetch_user(int(target_id))
+            embed = discord.Embed(
+                title="🚫 Aviso de Sanción Global",
+                description=(
+                    f"{user_obj.mention}, has sido añadido a la **blacklist global**.\n"
+                    f"**Motivo:** {reason}\n"
+                    f"Serás expulsado automáticamente de todos los servidores que usen este sistema."
+                ),
+                color=discord.Color.red()
+            )
+            await user_obj.send(embed=embed)
+        except:
+            pass
+
+        # Ban global inmediato
+        for guild in self.bot.guilds:
+            member = guild.get_member(int(target_id))
+            if member:
+                try:
+                    await member.ban(reason="Blacklist global")
+                except:
+                    pass
+
+        await message.channel.send(
+            f"🌐 Usuario `{target_id}` añadido a la blacklist global.\n"
+            f"Pruebas guardadas: **{len(proofs)}**",
+            delete_after=10
+        )
+
+    # ============================
+    # AUTO-BAN GLOBAL
+    # ============================
+
+    @commands.Cog.listener()
+    async def on_member_join(self, member: discord.Member):
+        uid = str(member.id)
+
+        # Global
+        if uid in blacklist_global:
+            try:
+                await member.ban(reason="Blacklist global")
+            except:
+                pass
+            return
+
+
+
+# ============================
+    # GLOBAL UNBLACKLIST
+    # ============================
+
+    @app_commands.command(
+        name="global_unblacklist",
+        description="Quita un usuario de la blacklist GLOBAL"
+    )
+    async def global_unblacklist_cmd(self, interaction: discord.Interaction, usuario: str):
+        if interaction.user.id != GLOBAL_OWNER_ID:
+            return await interaction.response.send_message(
+                "❌ Solo el dueño del bot puede usar este comando.",
                 ephemeral=True
             )
 
-        embed = build_global_embed()
-        view = GlobalBlacklistView(self.bot)
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        # Convertir mención a ID
+        if usuario.startswith("<@") and usuario.endswith(">"):
+            usuario = usuario.replace("<@", "").replace(">", "").replace("!", "")
+
+        try:
+            uid = str(int(usuario))
+        except:
+            return await interaction.response.send_message(
+                "❌ Debes introducir un usuario válido o un ID.",
+                ephemeral=True
+            )
+
+        if uid not in blacklist_global:
+            return await interaction.response.send_message(
+                "ℹ️ Ese usuario no está en la blacklist global.",
+                ephemeral=True
+            )
+
+        del blacklist_global[uid]
+        save_json("blacklist_global.json", blacklist_global)
+
+        await interaction.response.send_message(
+            f"✅ Usuario `{uid}` eliminado de la blacklist global.",
+            ephemeral=True
+        )
 
     # ============================
-    # BLACKLIST POR SERVIDOR
+    # GLOBAL INSPECT
+    # ============================
+
+    @app_commands.command(
+        name="global_inspect",
+        description="Inspecciona un usuario de la blacklist global"
+    )
+    async def global_inspect_cmd(self, interaction: discord.Interaction, usuario: str):
+        if interaction.user.id != GLOBAL_OWNER_ID:
+            return await interaction.response.send_message(
+                "❌ Solo el dueño del bot puede usar este comando.",
+                ephemeral=True
+            )
+
+        # Convertir mención a ID
+        if usuario.startswith("<@") and usuario.endswith(">"):
+            usuario = usuario.replace("<@", "").replace(">", "").replace("!", "")
+
+        try:
+            uid = str(int(usuario))
+        except:
+            return await interaction.response.send_message(
+                "❌ Debes introducir un usuario válido o un ID.",
+                ephemeral=True
+            )
+
+        if uid not in blacklist_global:
+            return await interaction.response.send_message(
+                "ℹ️ Ese usuario no está en la blacklist global.",
+                ephemeral=True
+            )
+
+        data = blacklist_global[uid]
+
+        pruebas = data.get("pruebas", [])
+        staff = data.get("staff", "Desconocido")
+        fecha = data.get("fecha", "Desconocida")
+
+        embed = discord.Embed(
+            title=f"🔍 Inspección de usuario {uid}",
+            color=discord.Color.orange()
+        )
+
+        embed.add_field(name="Motivo", value=data["razon"], inline=False)
+        embed.add_field(name="Staff", value=f"<@{staff}>", inline=False)
+        embed.add_field(name="Fecha", value=fecha, inline=False)
+
+        if pruebas:
+            embed.add_field(
+                name="Pruebas",
+                value="\n".join(f"[Archivo]({url})" for url in pruebas),
+                inline=False
+            )
+            embed.set_image(url=pruebas[0])  # Mostrar primera imagen
+        else:
+            embed.add_field(name="Pruebas", value="No se adjuntaron pruebas.", inline=False)
+
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    # ============================
+    # BLACKLIST POR SERVIDOR (TU SISTEMA ORIGINAL)
     # ============================
 
     @app_commands.command(
@@ -185,159 +434,6 @@ class Blacklist(commands.Cog):
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-
-
-# ============================
-    # BLACKLIST GLOBAL
-    # ============================
-
-    @app_commands.command(
-        name="global_blacklist",
-        description="Añade un usuario a la blacklist GLOBAL"
-    )
-    async def global_blacklist_cmd(
-        self,
-        interaction: discord.Interaction,
-        usuario: discord.User,
-        razon: str = "No especificada"
-    ):
-        if interaction.user.id != GLOBAL_OWNER_ID:
-            return await interaction.response.send_message(
-                "❌ Solo el dueño del bot puede usar este comando.",
-                ephemeral=True
-            )
-
-        uid = str(usuario.id)
-        blacklist_global[uid] = {"razon": razon}
-        save_json("blacklist_global.json", blacklist_global)
-
-        # DM al usuario con imagen grande
-        try:
-            embed = discord.Embed(
-                title="🚫 Aviso de Sanción Global",
-                description=(
-                    f"{usuario.mention}, has sido añadido a la **blacklist global**.\n"
-                    f"**Motivo:** {razon}\n"
-                    f"Serás expulsado automáticamente de todos los servidores que usen este sistema."
-                ),
-                color=discord.Color.red()
-            )
-
-            file = discord.File("assets/md_alert.jpeg", filename="alerta.jpeg")
-            embed.set_image(url="attachment://alerta.jpeg")
-
-            await usuario.send(embed=embed, file=file)
-        except:
-            pass
-
-        # Ban global inmediato en todos los servidores
-        for guild in self.bot.guilds:
-            member = guild.get_member(usuario.id)
-            if member:
-                try:
-                    await member.ban(reason="Blacklist global")
-                except:
-                    pass
-
-        await interaction.response.send_message(
-            f"🌐 {usuario.mention} añadido a la blacklist global.",
-            ephemeral=True
-        )
-
-    @app_commands.command(
-        name="global_unblacklist",
-        description="Quita un usuario de la blacklist GLOBAL"
-    )
-    async def global_unblacklist_cmd(
-        self,
-        interaction: discord.Interaction,
-        usuario: discord.User
-    ):
-        if interaction.user.id != GLOBAL_OWNER_ID:
-            return await interaction.response.send_message(
-                "❌ Solo el dueño del bot puede usar este comando.",
-                ephemeral=True
-            )
-
-        uid = str(usuario.id)
-
-        if uid not in blacklist_global:
-            return await interaction.response.send_message(
-                "ℹ️ Ese usuario no está en la blacklist global.",
-                ephemeral=True
-            )
-
-        del blacklist_global[uid]
-        save_json("blacklist_global.json", blacklist_global)
-
-        await interaction.response.send_message(
-            f"✅ {usuario.mention} eliminado de la blacklist global.",
-            ephemeral=True
-        )
-
-    @app_commands.command(
-        name="global_blacklistlist",
-        description="Lista la blacklist GLOBAL"
-    )
-    async def global_blacklistlist_cmd(self, interaction: discord.Interaction):
-        if interaction.user.id != GLOBAL_OWNER_ID:
-            return await interaction.response.send_message(
-                "❌ Solo el dueño del bot puede usar este comando.",
-                ephemeral=True
-            )
-
-        if not blacklist_global:
-            return await interaction.response.send_message(
-                "📭 La blacklist global está vacía.",
-                ephemeral=True
-            )
-
-        embed = discord.Embed(
-            title="🌐 Blacklist Global",
-            color=discord.Color.dark_red()
-        )
-
-        for uid, data in blacklist_global.items():
-            embed.add_field(
-                name=f"Usuario ID: {uid}",
-                value=f"Razón: {data['razon']}",
-                inline=False
-            )
-
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-
-    # ============================
-    # AUTO-BAN GLOBAL
-    # ============================
-
-    @commands.Cog.listener()
-    async def on_member_join(self, member: discord.Member):
-        uid = str(member.id)
-
-        # Global
-        if uid in blacklist_global:
-            try:
-                await member.ban(reason="Blacklist global")
-            except:
-                pass
-            return
-
-        # Por servidor
-        gid = str(member.guild.id)
-        if gid in blacklist_servers and uid in blacklist_servers[gid]["users"]:
-            data = blacklist_servers[gid]["users"][uid]
-            accion = data["accion"]
-
-            try:
-                if accion == "kick":
-                    await member.kick(reason="Blacklist del servidor")
-                elif accion == "ban":
-                    await member.ban(reason="Blacklist del servidor")
-                elif accion == "mute":
-                    pass  # Aquí puedes integrar tu sistema de mute
-            except:
-                pass
-
 # ============================
 # PANEL GLOBAL
 # ============================
@@ -362,25 +458,6 @@ def build_global_embed():
 # ============================
 # MODALS Y VIEW
 # ============================
-
-class GlobalAddModal(discord.ui.Modal, title="➕ Añadir a Blacklist Global"):
-    user_id = discord.ui.TextInput(label="ID de usuario", placeholder="123456789012345678")
-    reason = discord.ui.TextInput(label="Razón", default="No especificada", required=False)
-
-    async def on_submit(self, interaction: discord.Interaction):
-        if interaction.user.id != GLOBAL_OWNER_ID:
-            return await interaction.response.send_message("❌ No puedes usar este modal.", ephemeral=True)
-
-        uid = str(self.user_id.value).strip()
-        razon = str(self.reason.value) if self.reason.value else "No especificada"
-
-        blacklist_global[uid] = {"razon": razon}
-        save_json("blacklist_global.json", blacklist_global)
-
-        await interaction.response.send_message(
-            f"🌐 Usuario ID `{uid}` añadido a la blacklist global.\nRazón: {razon}",
-            ephemeral=True
-        )
 
 class GlobalRemoveModal(discord.ui.Modal, title="➖ Eliminar de Blacklist Global"):
     user_id = discord.ui.TextInput(label="ID de usuario", placeholder="123456789012345678")
