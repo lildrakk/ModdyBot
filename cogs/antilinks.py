@@ -37,6 +37,27 @@ class AntiLinksCog(commands.Cog):
         self.user_pages = {}
 
     # ============================
+    # ASEGURAR CONFIG POR SERVIDOR
+    # ============================
+
+    def ensure_guild_config(self, guild_id: str):
+        if guild_id not in self.config:
+            self.config[guild_id] = {
+                "enabled": False,
+                "allowed_roles": [],
+                "whitelist_users": [],
+                "whitelist_roles": [],
+                "whitelist_domains": [],
+                "allowed_servers": [],
+                "block_shorteners": True,
+                "block_obfuscated": True,
+                "manage_role": 0
+            }
+            save_antilinks(self.config)
+
+        return self.config[guild_id]
+
+    # ============================
     # COMANDO PRINCIPAL /antilinks
     # ============================
 
