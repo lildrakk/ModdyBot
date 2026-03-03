@@ -35,12 +35,6 @@ blacklist_global = load_json("blacklist_global.json")
 # ============================
 
 pending_proofs = {}
-# pending_proofs[staff_id] = {
-#     "target_id": "123",
-#     "reason": "motivo",
-#     "staff": 1394,
-#     "timestamp": "2026-03-03 00:52"
-# }
 
 # ============================
 # MODAL PARA AÑADIR A GLOBAL
@@ -80,7 +74,6 @@ class GlobalAddModal(discord.ui.Modal, title="➕ Añadir a Blacklist Global"):
                 ephemeral=True
             )
 
-        # Guardar en espera de pruebas
         pending_proofs[interaction.user.id] = {
             "target_id": str(target_id),
             "reason": reason,
@@ -130,7 +123,6 @@ class Blacklist(commands.Cog):
 
         staff_id = message.author.id
 
-        # ¿Este usuario está enviando pruebas?
         if staff_id not in pending_proofs:
             return
 
@@ -140,33 +132,35 @@ class Blacklist(commands.Cog):
         staff = entry["staff"]
         timestamp = entry["timestamp"]
 
-        # Recoger archivos adjuntos
         proofs = [a.url for a in message.attachments]
 
-        # Guardar en JSON
         blacklist_global[target_id] = {
             "razon": reason,
             "pruebas": proofs,
             "staff": staff,
-            "fecha": timestamp
+            "fecha_ban": timestamp
         }
         save_json("blacklist_global.json", blacklist_global)
 
-        # Eliminar de la lista de espera
         del pending_proofs[staff_id]
 
-        # Intentar DM al usuario
+        # DM estilo XN Protect
         try:
             user_obj = await self.bot.fetch_user(int(target_id))
             embed = discord.Embed(
-                title="🚫 Aviso de Sanción Global",
+                title="🚫 Has sido baneado globalmente (ModdyBot)",
                 description=(
-                    f"{user_obj.mention}, has sido añadido a la **blacklist global**.\n"
-                    f"**Motivo:** {reason}\n"
-                    f"Serás expulsado automáticamente de todos los servidores que usen este sistema."
+                    f"Has sido añadido a la **Blacklist Global de ModdyBot**.\n\n"
+                    f"**Razón:** {reason}\n"
+                    f"**Fecha del ban:** {timestamp}\n\n"
+                    f"**Pruebas:**\n"
+                    + ("\n".join(proofs) if proofs else "No se adjuntaron pruebas.") +
+                    "\n\nSi quieres apelar tu sanción, escribe por DM a **lil_drakko**."
                 ),
                 color=discord.Color.red()
             )
+            if proofs:
+                embed.set_image(url=proofs[0])
             await user_obj.send(embed=embed)
         except:
             pass
@@ -188,32 +182,36 @@ class Blacklist(commands.Cog):
 
 
 # ============================
-# AUTO-BAN GLOBAL
-# ============================
+    # AUTO-BAN GLOBAL (cuando entra un usuario baneado globalmente)
+    # ============================
 
-@commands.Cog.listener()
-async def on_member_join(self, member: discord.Member):
-    uid = str(member.id)
+    @commands.Cog.listener()
+    async def on_member_join(self, member: discord.Member):
+        uid = str(member.id)
 
-    # Si está en la blacklist global
-    if uid in blacklist_global:
+        if uid not in blacklist_global:
+            return
+
         data = blacklist_global[uid]
         razon = data.get("razon", "No especificada")
         pruebas = data.get("pruebas", [])
+        fecha_ban = data.get("fecha_ban", "Desconocida")
 
-        # Enviar DM antes del ban
+        # DM estilo XN Protect
         try:
             embed = discord.Embed(
-                title="🚫 Acceso denegado",
+                title="🚫 Acceso denegado (ModdyBot)",
                 description=(
-                    "No puedes entrar a este servidor porque estás **baneado globalmente de ModdyBot**.\n\n"
+                    "Has intentado entrar a un servidor donde está ModdyBot, "
+                    "pero estás **baneado globalmente**.\n\n"
                     f"**Razón:** {razon}\n"
+                    f"**Fecha del ban:** {fecha_ban}\n\n"
                     f"**Pruebas:**\n"
-                    + ("\n".join(pruebas) if pruebas else "No se adjuntaron pruebas.")
+                    + ("\n".join(pruebas) if pruebas else "No se adjuntaron pruebas.") +
+                    "\n\nSi quieres apelar tu sanción, escribe por DM a **lil_drakko**."
                 ),
                 color=discord.Color.red()
             )
-
             if pruebas:
                 embed.set_image(url=pruebas[0])
 
@@ -227,71 +225,72 @@ async def on_member_join(self, member: discord.Member):
         except:
             pass
 
-        return
+    # ============================
+    # GLOBAL UNBLACKLIST
+    # ============================
 
+    @app_commands.command(
+        name="global_unblacklist",
+        description="Quita un usuario de la blacklist GLOBAL"
+    )
+    async def global_unblacklist_cmd(self, interaction: discord.Interaction, usuario: str):
+        if interaction.user.id != GLOBAL_OWNER_ID:
+            return await interaction.response.send_message(
+                "❌ Solo el dueño del bot puede usar este comando.",
+                ephemeral=True
+            )
 
-# ============================
-# GLOBAL UNBLACKLIST
-# ============================
+        # Convertir mención a ID
+        if usuario.startswith("<@") and usuario.endswith(">"):
+            usuario = usuario.replace("<@", "").replace(">", "").replace("!", "")
 
-@app_commands.command(
-    name="global_unblacklist",
-    description="Quita un usuario de la blacklist GLOBAL"
-)
-async def global_unblacklist_cmd(self, interaction: discord.Interaction, usuario: str):
-    if interaction.user.id != GLOBAL_OWNER_ID:
-        return await interaction.response.send_message(
-            "❌ Solo el dueño del bot puede usar este comando.",
-            ephemeral=True
-        )
-
-    # Convertir mención a ID
-    if usuario.startswith("<@") and usuario.endswith(">"):
-        usuario = usuario.replace("<@", "").replace(">", "").replace("!", "")
-
-    try:
-        uid = str(int(usuario))
-    except:
-        return await interaction.response.send_message(
-            "❌ Debes introducir un usuario válido o un ID.",
-            ephemeral=True
-        )
-
-    if uid not in blacklist_global:
-        return await interaction.response.send_message(
-            "ℹ️ Ese usuario no está en la blacklist global.",
-            ephemeral=True
-        )
-
-    # Guardar datos antes de borrar
-    data = blacklist_global[uid]
-    razon = data.get("razon", "No especificada")
-    pruebas = data.get("pruebas", [])
-
-    # Eliminar del JSON
-    del blacklist_global[uid]
-    save_json("blacklist_global.json", blacklist_global)
-
-    # Intentar desbanear en todos los servidores
-    unbanned_count = 0
-    for guild in self.bot.guilds:
         try:
-            await guild.unban(discord.Object(id=int(uid)))
-            unbanned_count += 1
+            uid = str(int(usuario))
         except:
-            pass
+            return await interaction.response.send_message(
+                "❌ Debes introducir un usuario válido o un ID.",
+                ephemeral=True
+            )
 
-    # Intentar enviar DM al usuario
-    try:
-        user_obj = await self.bot.fetch_user(int(uid))
+        if uid not in blacklist_global:
+            return await interaction.response.send_message(
+                "ℹ️ Ese usuario no está en la blacklist global.",
+                ephemeral=True
+            )
 
+        # Datos del ban
+        data = blacklist_global[uid]
+        razon = data.get("razon", "No especificada")
+        pruebas = data.get("pruebas", [])
+        fecha_ban = data.get("fecha_ban", "Desconocida")
+
+        # Fecha del desban
+        fecha_desban = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+        # Eliminar del JSON
+        del blacklist_global[uid]
+        save_json("blacklist_global.json", blacklist_global)
+
+        # Desban global
+        unbanned_count = 0
+        for guild in self.bot.guilds:
+            try:
+                await guild.unban(discord.Object(id=int(uid)))
+                unbanned_count += 1
+            except:
+                pass
+
+        # Embed para DM y para ti (idéntico)
         embed = discord.Embed(
-            title="🔓 Has sido desbaneado globalmente",
+            title="🔓 Usuario Desbaneado Globalmente (ModdyBot)",
             description=(
-                "Has sido eliminado de la **blacklist global de ModdyBot**.\n\n"
+                f"**ID:** `{uid}`\n\n"
                 f"**Razón original del ban:** {razon}\n"
+                f"**Fecha del ban:** {fecha_ban}\n"
+                f"**Fecha del desban:** {fecha_desban}\n\n"
                 f"**Pruebas:**\n"
-                + ("\n".join(pruebas) if pruebas else "No se adjuntaron pruebas.")
+                + ("\n".join(pruebas) if pruebas else "No se adjuntaron pruebas.") +
+                "\n\nSi quieres apelar tu sanción, escribe por DM a **lil_drakko**."
             ),
             color=discord.Color.green()
         )
@@ -299,19 +298,121 @@ async def global_unblacklist_cmd(self, interaction: discord.Interaction, usuario
         if pruebas:
             embed.set_image(url=pruebas[0])
 
-        await user_obj.send(embed=embed)
-    except:
-        pass
+        # DM al usuario
+        try:
+            user_obj = await self.bot.fetch_user(int(uid))
+            await user_obj.send(embed=embed)
+        except:
+            pass
 
-    await interaction.response.send_message(
-        f"✅ Usuario `{uid}` eliminado de la blacklist global.\n"
-        f"🔓 Desbaneado de **{unbanned_count}** servidores.\n"
-        f"📨 Se ha intentado enviar un DM al usuario.",
-        ephemeral=True
-    )
-    
+        # Mensaje ephemeral para ti
+        await interaction.response.send_message(
+            embed=embed,
+            ephemeral=True
+        )
 
     # ============================
+    # COMANDO DE PRUEBA — GLOBAL BLACKLIST
+    # ============================
+
+    @app_commands.command(
+        name="global_blacklist_prueba",
+        description="Simula un ban global SIN banear a nadie (solo para el dueño)"
+    )
+    async def global_blacklist_prueba(self, interaction: discord.Interaction):
+        if interaction.user.id != GLOBAL_OWNER_ID:
+            return await interaction.response.send_message(
+                "❌ Solo el dueño del bot puede usar este comando.",
+                ephemeral=True
+            )
+
+        user = interaction.user
+        fecha = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+        # DM simulado
+        try:
+            embed_dm = discord.Embed(
+                title="🚫 Has sido baneado globalmente (SIMULACIÓN)",
+                description=(
+                    f"Esto es una **prueba** del mensaje que recibiría un usuario.\n\n"
+                    f"**Razón:** Prueba de sistema\n"
+                    f"**Fecha del ban:** {fecha}\n\n"
+                    f"**Pruebas:**\nNo se adjuntaron pruebas.\n\n"
+                    "Si quieres apelar tu sanción, escribe por DM a **lil_drakko**."
+                ),
+                color=discord.Color.red()
+            )
+            await user.send(embed=embed_dm)
+        except:
+            pass
+
+        # Logs simulados
+        embed_logs = discord.Embed(
+            title="🚨 Usuario Baneado Globalmente (SIMULACIÓN)",
+            description=(
+                f"**Usuario:** {user} (`{user.id}`)\n"
+                f"**Razón:** Prueba de sistema\n"
+                f"**Fecha:** {fecha}\n\n"
+                "Este mensaje es solo una simulación."
+            ),
+            color=discord.Color.orange()
+        )
+
+        await interaction.response.send_message(
+            "🧪 **Simulación enviada.**\nRevisa tu DM y el embed generado.",
+            ephemeral=True
+        )
+
+        await interaction.channel.send(embed=embed_logs)
+
+    # ============================
+    # COMANDO DE PRUEBA — GLOBAL UNBLACKLIST
+    # ============================
+
+    @app_commands.command(
+        name="global_unblacklist_prueba",
+        description="Simula un unban global SIN modificar nada (solo para el dueño)"
+    )
+    async def global_unblacklist_prueba(self, interaction: discord.Interaction):
+        if interaction.user.id != GLOBAL_OWNER_ID:
+            return await interaction.response.send_message(
+                "❌ Solo el dueño del bot puede usar este comando.",
+                ephemeral=True
+            )
+
+        user = interaction.user
+        fecha_ban = "2026-01-01 12:00"
+        fecha_desban = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+        embed = discord.Embed(
+            title="🔓 Usuario Desbaneado Globalmente (SIMULACIÓN)",
+            description=(
+                f"**ID:** `{user.id}`\n\n"
+                f"**Razón original del ban:** Prueba de sistema\n"
+                f"**Fecha del ban:** {fecha_ban}\n"
+                f"**Fecha del desban:** {fecha_desban}\n\n"
+                "No se adjuntaron pruebas.\n\n"
+                "Si quieres apelar tu sanción, escribe por DM a **lil_drakko**."
+            ),
+            color=discord.Color.green()
+        )
+
+        # DM simulado
+        try:
+            await user.send(embed=embed)
+        except:
+            pass
+
+        # Ephemeral para ti
+        await interaction.response.send_message(
+            embed=embed,
+            ephemeral=True
+    )
+
+
+
+
+# ============================
     # GLOBAL INSPECT
     # ============================
 
@@ -346,18 +447,19 @@ async def global_unblacklist_cmd(self, interaction: discord.Interaction, usuario
 
         data = blacklist_global[uid]
 
+        razon = data.get("razon", "No especificada")
         pruebas = data.get("pruebas", [])
         staff = data.get("staff", "Desconocido")
-        fecha = data.get("fecha", "Desconocida")
+        fecha_ban = data.get("fecha_ban", "Desconocida")
 
         embed = discord.Embed(
             title=f"🔍 Inspección de usuario {uid}",
             color=discord.Color.orange()
         )
 
-        embed.add_field(name="Motivo", value=data["razon"], inline=False)
+        embed.add_field(name="Motivo", value=razon, inline=False)
         embed.add_field(name="Staff", value=f"<@{staff}>", inline=False)
-        embed.add_field(name="Fecha", value=fecha, inline=False)
+        embed.add_field(name="Fecha del ban", value=fecha_ban, inline=False)
 
         if pruebas:
             embed.add_field(
@@ -365,7 +467,7 @@ async def global_unblacklist_cmd(self, interaction: discord.Interaction, usuario
                 value="\n".join(f"[Archivo]({url})" for url in pruebas),
                 inline=False
             )
-            embed.set_image(url=pruebas[0])  # Mostrar primera imagen
+            embed.set_image(url=pruebas[0])
         else:
             embed.add_field(name="Pruebas", value="No se adjuntaron pruebas.", inline=False)
 
