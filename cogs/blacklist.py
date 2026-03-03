@@ -186,12 +186,13 @@ class Blacklist(commands.Cog):
             delete_after=10
         )
 
-    # ============================
-    # AUTO-BAN GLOBAL
-    # ============================
 
-    @commands.Cog.listener()
-    async def on_member_join(self, member: discord.Member):
+# ============================
+# AUTO-BAN GLOBAL
+# ============================
+
+@commands.Cog.listener()
+async def on_member_join(self, member: discord.Member):
     uid = str(member.id)
 
     # Si está en la blacklist global
