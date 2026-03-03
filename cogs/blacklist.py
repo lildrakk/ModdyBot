@@ -230,7 +230,6 @@ async def on_member_join(self, member: discord.Member):
         return
 
 
-
 # ============================
 # GLOBAL UNBLACKLIST
 # ============================
@@ -264,6 +263,11 @@ async def global_unblacklist_cmd(self, interaction: discord.Interaction, usuario
             ephemeral=True
         )
 
+    # Guardar datos antes de borrar
+    data = blacklist_global[uid]
+    razon = data.get("razon", "No especificada")
+    pruebas = data.get("pruebas", [])
+
     # Eliminar del JSON
     del blacklist_global[uid]
     save_json("blacklist_global.json", blacklist_global)
@@ -275,13 +279,37 @@ async def global_unblacklist_cmd(self, interaction: discord.Interaction, usuario
             await guild.unban(discord.Object(id=int(uid)))
             unbanned_count += 1
         except:
-            pass  # No estaba baneado en ese servidor
+            pass
+
+    # Intentar enviar DM al usuario
+    try:
+        user_obj = await self.bot.fetch_user(int(uid))
+
+        embed = discord.Embed(
+            title="🔓 Has sido desbaneado globalmente",
+            description=(
+                "Has sido eliminado de la **blacklist global de ModdyBot**.\n\n"
+                f"**Razón original del ban:** {razon}\n"
+                f"**Pruebas:**\n"
+                + ("\n".join(pruebas) if pruebas else "No se adjuntaron pruebas.")
+            ),
+            color=discord.Color.green()
+        )
+
+        if pruebas:
+            embed.set_image(url=pruebas[0])
+
+        await user_obj.send(embed=embed)
+    except:
+        pass
 
     await interaction.response.send_message(
         f"✅ Usuario `{uid}` eliminado de la blacklist global.\n"
-        f"🔓 Desbaneado de **{unbanned_count}** servidores.",
+        f"🔓 Desbaneado de **{unbanned_count}** servidores.\n"
+        f"📨 Se ha intentado enviar un DM al usuario.",
         ephemeral=True
     )
+    
 
     # ============================
     # GLOBAL INSPECT
