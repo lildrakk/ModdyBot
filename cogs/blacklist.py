@@ -191,59 +191,96 @@ class Blacklist(commands.Cog):
     # ============================
 
     @commands.Cog.listener()
-    async def on_member_join(self, member: discord.Member):
-        uid = str(member.id)
+async def on_member_join(self, member: discord.Member):
+    uid = str(member.id)
 
-        # Global
-        if uid in blacklist_global:
-            try:
-                await member.ban(reason="Blacklist global")
-            except:
-                pass
-            return
+    # Si está en la blacklist global
+    if uid in blacklist_global:
+        data = blacklist_global[uid]
+        razon = data.get("razon", "No especificada")
+        pruebas = data.get("pruebas", [])
+
+        # Enviar DM antes del ban
+        try:
+            embed = discord.Embed(
+                title="🚫 Acceso denegado",
+                description=(
+                    "No puedes entrar a este servidor porque estás **baneado globalmente de ModdyBot**.\n\n"
+                    f"**Razón:** {razon}\n"
+                    f"**Pruebas:**\n"
+                    + ("\n".join(pruebas) if pruebas else "No se adjuntaron pruebas.")
+                ),
+                color=discord.Color.red()
+            )
+
+            if pruebas:
+                embed.set_image(url=pruebas[0])
+
+            await member.send(embed=embed)
+        except:
+            pass
+
+        # Ban automático
+        try:
+            await member.ban(reason="Blacklist global")
+        except:
+            pass
+
+        return
 
 
 
 # ============================
-    # GLOBAL UNBLACKLIST
-    # ============================
+# GLOBAL UNBLACKLIST
+# ============================
 
-    @app_commands.command(
-        name="global_unblacklist",
-        description="Quita un usuario de la blacklist GLOBAL"
-    )
-    async def global_unblacklist_cmd(self, interaction: discord.Interaction, usuario: str):
-        if interaction.user.id != GLOBAL_OWNER_ID:
-            return await interaction.response.send_message(
-                "❌ Solo el dueño del bot puede usar este comando.",
-                ephemeral=True
-            )
-
-        # Convertir mención a ID
-        if usuario.startswith("<@") and usuario.endswith(">"):
-            usuario = usuario.replace("<@", "").replace(">", "").replace("!", "")
-
-        try:
-            uid = str(int(usuario))
-        except:
-            return await interaction.response.send_message(
-                "❌ Debes introducir un usuario válido o un ID.",
-                ephemeral=True
-            )
-
-        if uid not in blacklist_global:
-            return await interaction.response.send_message(
-                "ℹ️ Ese usuario no está en la blacklist global.",
-                ephemeral=True
-            )
-
-        del blacklist_global[uid]
-        save_json("blacklist_global.json", blacklist_global)
-
-        await interaction.response.send_message(
-            f"✅ Usuario `{uid}` eliminado de la blacklist global.",
+@app_commands.command(
+    name="global_unblacklist",
+    description="Quita un usuario de la blacklist GLOBAL"
+)
+async def global_unblacklist_cmd(self, interaction: discord.Interaction, usuario: str):
+    if interaction.user.id != GLOBAL_OWNER_ID:
+        return await interaction.response.send_message(
+            "❌ Solo el dueño del bot puede usar este comando.",
             ephemeral=True
         )
+
+    # Convertir mención a ID
+    if usuario.startswith("<@") and usuario.endswith(">"):
+        usuario = usuario.replace("<@", "").replace(">", "").replace("!", "")
+
+    try:
+        uid = str(int(usuario))
+    except:
+        return await interaction.response.send_message(
+            "❌ Debes introducir un usuario válido o un ID.",
+            ephemeral=True
+        )
+
+    if uid not in blacklist_global:
+        return await interaction.response.send_message(
+            "ℹ️ Ese usuario no está en la blacklist global.",
+            ephemeral=True
+        )
+
+    # Eliminar del JSON
+    del blacklist_global[uid]
+    save_json("blacklist_global.json", blacklist_global)
+
+    # Intentar desbanear en todos los servidores
+    unbanned_count = 0
+    for guild in self.bot.guilds:
+        try:
+            await guild.unban(discord.Object(id=int(uid)))
+            unbanned_count += 1
+        except:
+            pass  # No estaba baneado en ese servidor
+
+    await interaction.response.send_message(
+        f"✅ Usuario `{uid}` eliminado de la blacklist global.\n"
+        f"🔓 Desbaneado de **{unbanned_count}** servidores.",
+        ephemeral=True
+    )
 
     # ============================
     # GLOBAL INSPECT
