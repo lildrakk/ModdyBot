@@ -410,6 +410,58 @@ class Blacklist(commands.Cog):
     )
 
 
+    # ============================
+    # GLOBAL BLACKLIST LIST
+    # ============================
+
+    @app_commands.command(
+        name="global_blacklistlist",
+        description="Muestra la lista completa de usuarios en la blacklist global"
+    )
+    async def global_blacklistlist_cmd(self, interaction: discord.Interaction):
+        if interaction.user.id != GLOBAL_OWNER_ID:
+            return await interaction.response.send_message(
+                "❌ Solo el dueño del bot puede usar este comando.",
+                ephemeral=True
+            )
+
+        if not blacklist_global:
+            return await interaction.response.send_message(
+                "📭 La blacklist global está vacía.",
+                ephemeral=True
+            )
+
+        embed = discord.Embed(
+            title="🌐 Lista de Blacklist Global (ModdyBot)",
+            description="Usuarios actualmente baneados globalmente:",
+            color=discord.Color.blurple()
+        )
+
+        for uid, data in blacklist_global.items():
+            razon = data.get("razon", "No especificada")
+            fecha = data.get("fecha_ban", "Desconocida")
+            staff = data.get("staff", "Desconocido")
+            pruebas = data.get("pruebas", [])
+
+            texto = (
+                f"**Razón:** {razon}\n"
+                f"**Fecha del ban:** {fecha}\n"
+                f"**Staff:** <@{staff}>\n"
+                f"**Pruebas:** "
+                + (f"{len(pruebas)} archivo(s)" if pruebas else "No adjuntadas")
+            )
+
+            embed.add_field(
+                name=f"ID: `{uid}`",
+                value=texto,
+                inline=False
+            )
+
+        embed.set_footer(text="Solo el dueño del bot puede ver esta información.")
+
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
 
 
 # ============================
