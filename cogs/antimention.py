@@ -35,8 +35,8 @@ class AntiMentionCog(commands.Cog):
         self.bot = bot
         self.config = load_antimention()
         self.user_pages = {}
-        self.panel_message = {}
         self.panel_owner = {}
+        self.panel_message = {}  # Guarda el mensaje ephemeral para editarlo
 
     # ============================
     # CONFIG POR SERVIDOR
@@ -96,7 +96,25 @@ class AntiMentionCog(commands.Cog):
         return discord.Embed(title=title, description=desc, color=discord.Color.blurple())
 
     # ============================
-    # SELECTS
+    # SELECT MENÚ PARA LOGS
+    # ============================
+
+    def select_logs_channel(self, guild, cfg):
+        options = [
+            discord.SelectOption(label=c.name, value=str(c.id), default=(cfg["logs_channel"] == c.id))
+            for c in guild.text_channels
+        ][:25]
+
+        return discord.ui.Select(
+            placeholder="Selecciona canal de logs",
+            min_values=1,
+            max_values=1,
+            options=options,
+            custom_id="mention_select_logs_channel"
+        )
+
+    # ============================
+    # SELECTS WHITELIST
     # ============================
 
     def select_whitelist_users(self, guild, cfg):
@@ -192,7 +210,7 @@ class AntiMentionCog(commands.Cog):
         return buttons
 
     # ============================
-    # PANEL PRINCIPAL
+    # PANEL PRINCIPAL (REESCRITO)
     # ============================
 
     async def build_panel(self, interaction, page):
@@ -213,7 +231,7 @@ class AntiMentionCog(commands.Cog):
         ))
 
         # ============================
-        # PÁGINA 1 — GENERAL
+        # PÁGINAS
         # ============================
 
         if page == 1:
@@ -228,10 +246,6 @@ class AntiMentionCog(commands.Cog):
             view.add_item(discord.ui.Button(label="Cambiar tiempo mute", style=discord.ButtonStyle.blurple, custom_id="mention_change_mute"))
             view.add_item(discord.ui.Button(label="Modo progresivo", style=discord.ButtonStyle.gray, custom_id="mention_toggle_progressive"))
             view.add_item(btn_save)
-
-        # ============================
-        # PÁGINA 2 — CONTROL @EVERYONE
-        # ============================
 
         elif page == 2:
             roles_everyone = [r.name for r in guild.roles if r.permissions.mention_everyone]
@@ -266,23 +280,14 @@ class AntiMentionCog(commands.Cog):
                 custom_id="mention_toggle_everyone"
             ))
 
-            # Canal de logs
-            logs_channel = cfg["logs_channel"]
+            # Select menú de logs
             embed.add_field(
                 name="Canal de logs",
-                value=f"<#{logs_channel}>" if logs_channel else "No configurado",
+                value=f"<#{cfg['logs_channel']}>" if cfg["logs_channel"] else "No configurado",
                 inline=False
             )
 
-            view.add_item(discord.ui.Button(
-                label="Cambiar canal de logs",
-                style=discord.ButtonStyle.blurple,
-                custom_id="mention_change_logs_channel"
-            ))
-
-        # ============================
-        # PÁGINA 3 — USUARIOS
-        # ============================
+            view.add_item(self.select_logs_channel(guild, cfg))
 
         elif page == 3:
             embed.add_field(name="Módulo activado", value="Sí" if cfg["user_mentions"]["enabled"] else "No", inline=False)
@@ -296,10 +301,6 @@ class AntiMentionCog(commands.Cog):
             view.add_item(self.select_whitelist_users(guild, cfg))
             view.add_item(self.select_whitelist_roles(guild, cfg))
 
-        # ============================
-        # PÁGINA 4 — ROLES
-        # ============================
-
         elif page == 4:
             embed.add_field(name="Módulo activado", value="Sí" if cfg["role_mentions"]["enabled"] else "No", inline=False)
             embed.add_field(name="Máx. menciones", value=str(cfg["role_mentions"]["max_mentions"]), inline=False)
@@ -310,10 +311,6 @@ class AntiMentionCog(commands.Cog):
             view.add_item(discord.ui.Button(label="Activar/Desactivar módulo", style=discord.ButtonStyle.gray, custom_id="mention_toggle_role"))
 
             view.add_item(self.select_whitelist_roles(guild, cfg))
-
-        # ============================
-        # PÁGINA 5 — WHITELIST GENERAL
-        # ============================
 
         elif page == 5:
             embed.add_field(
@@ -336,10 +333,6 @@ class AntiMentionCog(commands.Cog):
             view.add_item(self.select_whitelist_roles(guild, cfg))
             view.add_item(self.select_whitelist_channels(guild, cfg))
 
-        # ============================
-        # PÁGINA 6 — OPCIONES AVANZADAS
-        # ============================
-
         elif page == 6:
             embed.add_field(name="Cooldown", value=f"{cfg['cooldown']}s", inline=False)
             embed.add_field(name="Modo progresivo", value="Sí" if cfg["progressive"] else "No", inline=False)
@@ -361,35 +354,33 @@ class AntiMentionCog(commands.Cog):
             view.add_item(btn)
 
         # ============================
-        # ENVIAR PANEL
+        # RESPUESTA SEGURA
         # ============================
 
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-
-    # ============================
-    # COMANDO PRINCIPAL
-    # ============================
-
-    @app_commands.command(name="antimention", description="Abrir panel Anti‑Mention")
-    async def antimention_cmd(self, interaction: discord.Interaction):
-        guild_id = str(interaction.guild.id)
-
-        if not interaction.user.guild_permissions.administrator:
-            return await interaction.response.send_message("❌ Solo administradores pueden usar este comando.", ephemeral=True)
-
-        self.panel_owner[guild_id] = interaction.user.id
-        self.user_pages[interaction.user.id] = 1
-
-        await self.build_panel(interaction, 1)
+        if interaction.response.is_done():
+            await interaction.followup.edit_message(
+                message_id=self.panel_message.get(interaction.user.id),
+                embed=embed,
+                view=view
+            )
+        else:
+            msg = await interaction.response.send_message(
+                embed=embed,
+                view=view,
+                ephemeral=True
+            )
+            self.panel_message[interaction.user.id] = msg.id
 
 
 
 # ============================
-    # INTERACCIONES DEL PANEL
+    # INTERACCIONES DEL PANEL (REESCRITO)
     # ============================
 
     @commands.Cog.listener()
     async def on_interaction(self, interaction: discord.Interaction):
+
+        # Solo manejamos componentes del panel
         if interaction.type != discord.InteractionType.component:
             return
 
@@ -401,13 +392,20 @@ class AntiMentionCog(commands.Cog):
         guild_id = str(guild.id)
         user = interaction.user
 
-        # Solo el que abrió el panel puede usarlo
+        # Solo el dueño del panel puede usarlo
         if guild_id in self.panel_owner and user.id != self.panel_owner[guild_id]:
-            return await interaction.response.send_message(
-                "❌ Solo quien abrió el panel puede usarlo.",
-                ephemeral=True
-            )
+            if not interaction.response.is_done():
+                return await interaction.response.send_message(
+                    "❌ Solo quien abrió el panel puede usarlo.",
+                    ephemeral=True
+                )
+            else:
+                return await interaction.followup.send(
+                    "❌ Solo quien abrió el panel puede usarlo.",
+                    ephemeral=True
+                )
 
+        # Página actual
         page = self.user_pages.get(user.id, 1)
         cfg = self.ensure_guild_config(guild_id)
 
@@ -416,10 +414,10 @@ class AntiMentionCog(commands.Cog):
         # ============================
 
         if custom_id == "mention_close_panel":
-            return await interaction.response.send_message(
-                "🔒 Panel cerrado.",
-                ephemeral=True
-            )
+            if not interaction.response.is_done():
+                return await interaction.response.send_message("🔒 Panel cerrado.", ephemeral=True)
+            else:
+                return await interaction.followup.send("🔒 Panel cerrado.", ephemeral=True)
 
         # ============================
         # NAVEGACIÓN
@@ -465,6 +463,18 @@ class AntiMentionCog(commands.Cog):
             return await self.build_panel(interaction, page)
 
         # ============================
+        # SELECT MENÚ — LOGS CHANNEL
+        # ============================
+
+        if custom_id == "mention_select_logs_channel":
+            selected = interaction.data.get("values", [])
+            if selected:
+                cfg["logs_channel"] = int(selected[0])
+                save_antimention(self.config)
+
+            return await self.build_panel(interaction, page)
+
+        # ============================
         # SELECTS (WHITELIST)
         # ============================
 
@@ -484,30 +494,34 @@ class AntiMentionCog(commands.Cog):
             return await self.build_panel(interaction, page)
 
         # ============================
-        # MODALS
+        # MODALES (REESCRITOS)
         # ============================
 
         class MentionModal(discord.ui.Modal):
-            def __init__(self, cog, title, label, cb):
+            def __init__(self, title, label, callback):
                 super().__init__(title=title)
-                self.cog = cog
-                self.cb = cb
+                self.callback_fn = callback
                 self.input = discord.ui.TextInput(label=label, required=True)
                 self.add_item(self.input)
 
             async def on_submit(self, modal_interaction):
-                await self.cb(modal_interaction, self.input.value)
+                await self.callback_fn(modal_interaction, self.input.value)
 
         # Cambiar acción
         if custom_id == "mention_change_action":
             async def cb(i, value):
                 cfg["action"] = value.lower()
                 save_antimention(self.config)
-                await i.response.send_message("💾 Acción actualizada.", ephemeral=True)
+
+                if not i.response.is_done():
+                    await i.response.send_message("💾 Acción actualizada.", ephemeral=True)
+                else:
+                    await i.followup.send("💾 Acción actualizada.", ephemeral=True)
+
                 await self.build_panel(i, page)
 
             return await interaction.response.send_modal(
-                MentionModal(self, "Cambiar acción", "warn / mute / kick / ban", cb)
+                MentionModal("Cambiar acción", "warn / mute / kick / ban", cb)
             )
 
         # Cambiar mute
@@ -515,11 +529,16 @@ class AntiMentionCog(commands.Cog):
             async def cb(i, value):
                 cfg["mute_time"] = max(1, int(value))
                 save_antimention(self.config)
-                await i.response.send_message("💾 Tiempo mute actualizado.", ephemeral=True)
+
+                if not i.response.is_done():
+                    await i.response.send_message("💾 Tiempo mute actualizado.", ephemeral=True)
+                else:
+                    await i.followup.send("💾 Tiempo mute actualizado.", ephemeral=True)
+
                 await self.build_panel(i, page)
 
             return await interaction.response.send_modal(
-                MentionModal(self, "Cambiar tiempo mute", "Segundos:", cb)
+                MentionModal("Cambiar tiempo mute", "Segundos:", cb)
             )
 
         # Cambiar límite @everyone
@@ -527,23 +546,16 @@ class AntiMentionCog(commands.Cog):
             async def cb(i, value):
                 cfg["everyone"]["max_mentions"] = max(1, int(value))
                 save_antimention(self.config)
-                await i.response.send_message("💾 Límite actualizado.", ephemeral=True)
+
+                if not i.response.is_done():
+                    await i.response.send_message("💾 Límite actualizado.", ephemeral=True)
+                else:
+                    await i.followup.send("💾 Límite actualizado.", ephemeral=True)
+
                 await self.build_panel(i, page)
 
             return await interaction.response.send_modal(
-                MentionModal(self, "Límite @everyone", "Máx. menciones:", cb)
-            )
-
-        # Cambiar canal logs
-        if custom_id == "mention_change_logs_channel":
-            async def cb(i, value):
-                cfg["logs_channel"] = int(value)
-                save_antimention(self.config)
-                await i.response.send_message("💾 Canal de logs actualizado.", ephemeral=True)
-                await self.build_panel(i, page)
-
-            return await interaction.response.send_modal(
-                MentionModal(self, "Canal de logs", "ID del canal:", cb)
+                MentionModal("Límite @everyone", "Máx. menciones:", cb)
             )
 
         # Cambiar límites usuarios
@@ -551,22 +563,32 @@ class AntiMentionCog(commands.Cog):
             async def cb(i, value):
                 cfg["user_mentions"]["max_mentions"] = max(1, int(value))
                 save_antimention(self.config)
-                await i.response.send_message("💾 Máx. menciones actualizado.", ephemeral=True)
+
+                if not i.response.is_done():
+                    await i.response.send_message("💾 Máx. menciones actualizado.", ephemeral=True)
+                else:
+                    await i.followup.send("💾 Máx. menciones actualizado.", ephemeral=True)
+
                 await self.build_panel(i, page)
 
             return await interaction.response.send_modal(
-                MentionModal(self, "Máx. menciones usuario", "Cantidad:", cb)
+                MentionModal("Máx. menciones usuario", "Cantidad:", cb)
             )
 
         if custom_id == "mention_change_user_repeat":
             async def cb(i, value):
                 cfg["user_mentions"]["max_repeat"] = max(1, int(value))
                 save_antimention(self.config)
-                await i.response.send_message("💾 Repetición actualizada.", ephemeral=True)
+
+                if not i.response.is_done():
+                    await i.response.send_message("💾 Repetición actualizada.", ephemeral=True)
+                else:
+                    await i.followup.send("💾 Repetición actualizada.", ephemeral=True)
+
                 await self.build_panel(i, page)
 
             return await interaction.response.send_modal(
-                MentionModal(self, "Máx. repetición usuario", "Cantidad:", cb)
+                MentionModal("Máx. repetición usuario", "Cantidad:", cb)
             )
 
         # Cambiar límites roles
@@ -574,22 +596,32 @@ class AntiMentionCog(commands.Cog):
             async def cb(i, value):
                 cfg["role_mentions"]["max_mentions"] = max(1, int(value))
                 save_antimention(self.config)
-                await i.response.send_message("💾 Máx. menciones actualizado.", ephemeral=True)
+
+                if not i.response.is_done():
+                    await i.response.send_message("💾 Máx. menciones actualizado.", ephemeral=True)
+                else:
+                    await i.followup.send("💾 Máx. menciones actualizado.", ephemeral=True)
+
                 await self.build_panel(i, page)
 
             return await interaction.response.send_modal(
-                MentionModal(self, "Máx. menciones rol", "Cantidad:", cb)
+                MentionModal("Máx. menciones rol", "Cantidad:", cb)
             )
 
         if custom_id == "mention_change_role_repeat":
             async def cb(i, value):
                 cfg["role_mentions"]["max_repeat"] = max(1, int(value))
                 save_antimention(self.config)
-                await i.response.send_message("💾 Repetición actualizada.", ephemeral=True)
+
+                if not i.response.is_done():
+                    await i.response.send_message("💾 Repetición actualizada.", ephemeral=True)
+                else:
+                    await i.followup.send("💾 Repetición actualizada.", ephemeral=True)
+
                 await self.build_panel(i, page)
 
             return await interaction.response.send_modal(
-                MentionModal(self, "Máx. repetición rol", "Cantidad:", cb)
+                MentionModal("Máx. repetición rol", "Cantidad:", cb)
             )
 
         # Cambiar cooldown
@@ -597,11 +629,16 @@ class AntiMentionCog(commands.Cog):
             async def cb(i, value):
                 cfg["cooldown"] = max(0, int(value))
                 save_antimention(self.config)
-                await i.response.send_message("💾 Cooldown actualizado.", ephemeral=True)
+
+                if not i.response.is_done():
+                    await i.response.send_message("💾 Cooldown actualizado.", ephemeral=True)
+                else:
+                    await i.followup.send("💾 Cooldown actualizado.", ephemeral=True)
+
                 await self.build_panel(i, page)
 
             return await interaction.response.send_modal(
-                MentionModal(self, "Cambiar cooldown", "Segundos:", cb)
+                MentionModal("Cambiar cooldown", "Segundos:", cb)
             )
 
         # ============================
@@ -619,7 +656,10 @@ class AntiMentionCog(commands.Cog):
 
             msg = "🔧 Permiso removido de:\n" + "\n".join(f"• {r}" for r in removed) if removed else "No había roles que modificar."
 
-            return await interaction.response.send_message(msg, ephemeral=True)
+            if not interaction.response.is_done():
+                return await interaction.response.send_message(msg, ephemeral=True)
+            else:
+                return await interaction.followup.send(msg, ephemeral=True)
 
         # ============================
         # GUARDAR
@@ -627,16 +667,26 @@ class AntiMentionCog(commands.Cog):
 
         if custom_id == "mention_save":
             save_antimention(self.config)
-            return await interaction.response.send_message("💾 Configuración guardada.", ephemeral=True)
+
+            if not interaction.response.is_done():
+                return await interaction.response.send_message("💾 Configuración guardada.", ephemeral=True)
+            else:
+                return await interaction.followup.send("💾 Configuración guardada.", ephemeral=True)
 
         # ============================
         # TEST
         # ============================
 
         if custom_id == "mention_test":
-            return await interaction.response.send_message("🧪 Test Anti‑Mention ejecutado.", ephemeral=True)
+            if not interaction.response.is_done():
+                return await interaction.response.send_message("🧪 Test Anti‑Mention ejecutado.", ephemeral=True)
+            else:
+                return await interaction.followup.send("🧪 Test Anti‑Mention ejecutado.", ephemeral=True)
 
-    # ============================
+
+
+
+# ============================
     # DETECCIÓN DE MENCIONES
     # ============================
 
