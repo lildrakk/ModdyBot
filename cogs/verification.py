@@ -5,8 +5,9 @@ import json
 import os
 import random
 import string
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
 import io
+import math
 
 VERIFICATION_FILE = "verification.json"
 
@@ -26,54 +27,73 @@ def save_verification(data):
         json.dump(data, f, indent=4)
 
 # ============================
-# CAPTCHA MEJORADO
+# CAPTCHA MEJORADO PRO
 # ============================
 
 def generar_captcha():
     letras = string.ascii_letters + string.digits
     codigo = ''.join(random.choice(letras) for _ in range(6))
 
-    width, height = 400, 150
-    img = Image.new("RGB", (width, height), (30, 30, 30))
+    width, height = 420, 160
+    img = Image.new("RGB", (width, height))
+
+    # Fondo degradado
+    base_color = random.randint(40, 80)
+    for y in range(height):
+        for x in range(width):
+            img.putpixel((x, y), (
+                base_color + random.randint(-10, 10),
+                base_color + random.randint(-10, 10),
+                base_color + random.randint(-10, 10)
+            ))
+
     draw = ImageDraw.Draw(img)
 
-    # Líneas de color
-    for i in range(12):
-        x1 = random.randint(0, width)
-        y1 = random.randint(0, height)
-        x2 = random.randint(0, width)
-        y2 = random.randint(0, height)
-        draw.line(
-            (x1, y1, x2, y2),
-            fill=(random.randint(50, 150), random.randint(50, 150), random.randint(50, 150)),
-            width=3
-        )
+    # Líneas curvas
+    for _ in range(4):
+        points = []
+        for i in range(6):
+            points.append((random.randint(0, width), random.randint(0, height)))
+        draw.line(points, fill=(random.randint(100, 200), random.randint(100, 200), random.randint(100, 200)), width=3)
 
-    # Fuente grande
+    # Fuente
     try:
-        font = ImageFont.truetype("arial.ttf", 70)
+        font = ImageFont.truetype("arial.ttf", 60)
     except:
         font = ImageFont.load_default()
 
-    # Centrar texto
-    text_width, text_height = draw.textsize(codigo, font=font)
-    x = (width - text_width) // 2
-    y = (height - text_height) // 2
+    # Dibujar cada letra con rotación
+    x_offset = 40
+    for char in codigo:
+        angle = random.randint(-25, 25)
 
-    # Sombra
-    draw.text((x+3, y+3), codigo, font=font, fill=(0, 0, 0))
+        # Crear imagen temporal para rotar
+        temp = Image.new("RGBA", (100, 100), (0, 0, 0, 0))
+        temp_draw = ImageDraw.Draw(temp)
 
-    # Texto principal
-    draw.text((x, y), codigo, font=font, fill=(255, 255, 255))
+        bbox = temp_draw.textbbox((0, 0), char, font=font)
+        w = bbox[2] - bbox[0]
+        h = bbox[3] - bbox[1]
+
+        temp_draw.text((50 - w//2, 50 - h//2), char, font=font, fill=(255, 255, 255))
+
+        rotated = temp.rotate(angle, expand=1)
+
+        img.paste(rotated, (x_offset, (height // 2) - 40), rotated)
+        x_offset += 55
 
     # Ruido
-    for _ in range(300):
+    for _ in range(350):
         px = random.randint(0, width - 1)
         py = random.randint(0, height - 1)
-        draw.point(
-            (px, py),
-            fill=(random.randint(100, 255), random.randint(100, 255), random.randint(100, 255))
-        )
+        img.putpixel((px, py), (
+            random.randint(150, 255),
+            random.randint(150, 255),
+            random.randint(150, 255)
+        ))
+
+    # Suavizado ligero
+    img = img.filter(ImageFilter.SMOOTH_MORE)
 
     buffer = io.BytesIO()
     img.save(buffer, format="PNG")
