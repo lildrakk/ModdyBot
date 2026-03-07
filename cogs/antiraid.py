@@ -1,214 +1,599 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
-import json
-import os
-import time
+import json, os, time
 from datetime import datetime, timezone
 
-ANTIRAID_FILE = "antiraid.json"
+CONFIG_FILE = "antiraid_config.json"
+BLACKLIST_FILE = "antiraid_blacklist.json"
 
-# ============================
-# JSON LOADER
-# ============================
 
-def load_antiraid():
-    if not os.path.exists(ANTIRAID_FILE):
-        data = {
-            "enabled": False,
-            "raid_limit": 5,
-            "time_window": 10,
-            "min_account_days": 7,
-            "action": "ban"
-        }
-        with open(ANTIRAID_FILE, "w") as f:
-            json.dump(data, f, indent=4)
-        return data
+# ============================================================
+# CONFIG POR SERVIDOR (JSON)
+# ============================================================
 
-    with open(ANTIRAID_FILE, "r") as f:
+def load_config():
+    if not os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "w") as f:
+            json.dump({}, f, indent=4)
+    with open(CONFIG_FILE, "r") as f:
         return json.load(f)
 
-def save_antiraid(data):
-    with open(ANTIRAID_FILE, "w") as f:
+def save_config(data):
+    with open(CONFIG_FILE, "w") as f:
         json.dump(data, f, indent=4)
 
-# ============================
-# COG ANTI-RAID
-# ============================
+def get_guild_config(guild_id: int):
+    data = load_config()
+    gid = str(guild_id)
 
-class AntiRaidCog(commands.Cog):
+    if gid not in data:
+        data[gid] = {
+            "enabled": True,
+            "log_channel": None,
+
+            # Datos dinámicos
+            "join_times": [],
+            "user_risk": {},
+            "channel_deletions": [],
+            "channel_creations": [],
+
+            # Ajustes
+            "settings": {
+                "sensitivity": "medium",
+                "join_limit": 5,
+                "join_window": 10,
+                "min_account_days": 7,
+                "spam_window": 5,
+                "spam_messages": 4,
+                "channel_delete_limit": 3,
+                "channel_create_limit": 3
+            },
+
+            # Lockdown
+            "lockdown_active": False,
+            "lockdown_state": {}
+        }
+        save_config(data)
+
+    return data[gid]
+
+def update_guild_config(guild_id: int, new_data: dict):
+    data = load_config()
+    data[str(guild_id)] = new_data
+    save_config(data)
+
+
+# ============================================================
+# COG ANTI-RAID COMPLETO
+# ============================================================
+
+class AntiRaid(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.antiraid = load_antiraid()
-        self.join_times = []
 
-    # ============================
-    # /antiraid
-    # ============================
+    # ============================================================
+    # SISTEMA DE RIESGO
+    # ============================================================
 
-    @app_commands.command(
-        name="antiraid",
-        description="Configura el sistema Anti-Raid"
-    )
-    @app_commands.describe(
-        enabled="Activa o desactiva el Anti-Raid (on/off)",
-        action="Acción cuando se detecta un raid: kick / ban / lockdown",
-        raid_limit="Usuarios necesarios para detectar raid",
-        time_window="Segundos para medir el raid",
-        min_account_days="Días mínimos de antigüedad de cuenta"
-    )
-    async def antiraid_config(
-        self,
-        interaction: discord.Interaction,
-        enabled: str = None,
-        action: str = None,
-        raid_limit: int = None,
-        time_window: int = None,
-        min_account_days: int = None
-    ):
+    def add_risk(self, guild_id: int, user_id: int, amount: int, reason: str):
+        config = get_guild_config(guild_id)
+        uid = str(user_id)
 
-        # Permisos
-        if interaction.user.guild_permissions.administrator:
-            pass
-        elif not interaction.user.guild_permissions.manage_guild:
-            return await interaction.response.send_message(
-                "❌ No tienes permiso para usar este comando.",
-                ephemeral=True
-            )
+        if uid not in config["user_risk"]:
+            config["user_risk"][uid] = {"risk": 0, "reasons": [], "messages": []}
 
-        cambios = []
+        config["user_risk"][uid]["risk"] += amount
+        config["user_risk"][uid]["reasons"].append(reason)
 
-        # Activar / desactivar
-        if enabled:
-            enabled = enabled.lower()
-            if enabled in ["on", "off"]:
-                self.antiraid["enabled"] = (enabled == "on")
-                cambios.append(f"🟢 Anti-Raid: **{enabled.upper()}**")
-            else:
-                return await interaction.response.send_message(
-                    "❌ Usa: on / off",
-                    ephemeral=True
-                )
+        if config["user_risk"][uid]["risk"] > 100:
+            config["user_risk"][uid]["risk"] = 100
 
-        # Acción
-        if action:
-            action = action.lower()
-            if action in ["kick", "ban", "lockdown"]:
-                self.antiraid["action"] = action
-                cambios.append(f"⚙️ Acción: **{action.upper()}**")
-            else:
-                return await interaction.response.send_message(
-                    "❌ Acciones válidas: kick / ban / lockdown",
-                    ephemeral=True
-                )
+        update_guild_config(guild_id, config)
 
-        # Límite de raid
-        if raid_limit:
-            self.antiraid["raid_limit"] = raid_limit
-            cambios.append(f"👥 Límite de raid: **{raid_limit} usuarios**")
+    def get_global_risk(self, guild_id: int):
+        config = get_guild_config(guild_id)
+        return sum(data["risk"] for data in config["user_risk"].values())
 
-        # Ventana de tiempo
-        if time_window:
-            self.antiraid["time_window"] = time_window
-            cambios.append(f"⏳ Ventana de tiempo: **{time_window} segundos**")
-
-        # Antigüedad mínima
-        if min_account_days:
-            self.antiraid["min_account_days"] = min_account_days
-            cambios.append(f"📅 Antigüedad mínima: **{min_account_days} días**")
-
-        save_antiraid(self.antiraid)
-
-        if not cambios:
-            return await interaction.response.send_message(
-                "ℹ️ No se ha cambiado nada. Usa las opciones del comando.",
-                ephemeral=True
-            )
-
-        mensaje = "🛡️ **Anti-Raid actualizado:**\n" + "\n".join(cambios)
-        await interaction.response.send_message(mensaje, ephemeral=True)
-
-    # ============================
-    # EVENTO: on_member_join
-    # ============================
+    # ============================================================
+    # DETECCIÓN: ENTRADAS
+    # ============================================================
 
     @commands.Cog.listener()
-    async def on_member_join(self, member: discord.Member):
-
-        now = time.time()
-
-        if not self.antiraid.get("enabled", False):
+    async def on_member_join(self, member):
+        config = get_guild_config(member.guild.id)
+        if not config["enabled"]:
             return
 
-        # Logs opcionales
-        try:
-            from main import logs
-            log_channel_id = logs.get("log_channel")
-            log_channel = member.guild.get_channel(log_channel_id) if log_channel_id else None
-        except:
-            log_channel = None
+        now = time.time()
+        config["join_times"].append(now)
+        config["join_times"] = [t for t in config["join_times"] if now - t <= config["settings"]["join_window"]]
 
-        # 1. Protección cuentas nuevas
-        account_age_days = (datetime.now(timezone.utc) - member.created_at).days
-        min_days = self.antiraid["min_account_days"]
+        # Cuenta nueva
+        age = (datetime.now(timezone.utc) - member.created_at).days
+        if age < config["settings"]["min_account_days"]:
+            self.add_risk(member.guild.id, member.id, 25, f"Cuenta nueva ({age} días)")
 
-        if account_age_days < min_days:
+        # Nombre sospechoso
+        if any(x in member.name.lower() for x in ["bot", "raid", "spam", "xxx", "123"]):
+            self.add_risk(member.guild.id, member.id, 15, "Nombre sospechoso")
+
+        # Entradas masivas
+        if len(config["join_times"]) >= config["settings"]["join_limit"]:
+            self.add_risk(member.guild.id, member.id, 40, "Entradas masivas detectadas")
+
+        update_guild_config(member.guild.id, config)
+
+        await self.auto_lockdown_check(member.guild)
+        await self.punish_high_risk_users(member.guild)
+
+    # ============================================================
+    # DETECCIÓN: MENSAJES
+    # ============================================================
+
+    @commands.Cog.listener()
+    async def on_message(self, message):
+        if message.author.bot or not message.guild:
+            return
+
+        config = get_guild_config(message.guild.id)
+        if not config["enabled"]:
+            return
+
+        uid = str(message.author.id)
+        now = time.time()
+
+        if uid not in config["user_risk"]:
+            config["user_risk"][uid] = {"risk": 0, "reasons": [], "messages": []}
+
+        config["user_risk"][uid]["messages"].append(now)
+        config["user_risk"][uid]["messages"] = [
+            t for t in config["user_risk"][uid]["messages"]
+            if now - t <= config["settings"]["spam_window"]
+        ]
+
+        if len(config["user_risk"][uid]["messages"]) >= config["settings"]["spam_messages"]:
+            self.add_risk(message.guild.id, message.author.id, 20, "Spam coordinado detectado")
+
+        update_guild_config(message.guild.id, config)
+
+        await self.auto_lockdown_check(message.guild)
+        await self.punish_high_risk_users(message.guild)
+
+    # ============================================================
+    # DETECCIÓN: CANALES
+    # ============================================================
+
+    @commands.Cog.listener()
+    async def on_guild_channel_delete(self, channel):
+        config = get_guild_config(channel.guild.id)
+        now = time.time()
+
+        config["channel_deletions"].append(now)
+        config["channel_deletions"] = [t for t in config["channel_deletions"] if now - t <= 10]
+
+        if len(config["channel_deletions"]) >= config["settings"]["channel_delete_limit"]:
+            self.add_risk(channel.guild.id, 0, 30, "Borrado masivo de canales")
+
+        update_guild_config(channel.guild.id, config)
+
+        await self.auto_lockdown_check(channel.guild)
+        await self.punish_high_risk_users(channel.guild)
+
+    @commands.Cog.listener()
+    async def on_guild_channel_create(self, channel):
+        config = get_guild_config(channel.guild.id)
+        now = time.time()
+
+        config["channel_creations"].append(now)
+        config["channel_creations"] = [t for t in config["channel_creations"] if now - t <= 10]
+
+        if len(config["channel_creations"]) >= config["settings"]["channel_create_limit"]:
+            self.add_risk(channel.guild.id, 0, 30, "Creación masiva de canales")
+
+        update_guild_config(channel.guild.id, config)
+
+        await self.auto_lockdown_check(channel.guild)
+        await self.punish_high_risk_users(channel.guild)
+
+    # ============================================================
+    # LOGS PRO
+    # ============================================================
+
+    async def send_log(self, guild, embed):
+        config = get_guild_config(guild.id)
+        log_id = config.get("log_channel")
+
+        if log_id:
+            ch = guild.get_channel(log_id)
+            if ch:
+                try:
+                    await ch.send(embed=embed)
+                    return
+                except:
+                    pass
+
+        print(f"[AntiRaid LOG] {guild.name}: {embed.title}")
+
+    async def log_action(self, guild, user, action, reason):
+        embed = discord.Embed(
+            title="🚨 Acción Anti-Raid",
+            color=discord.Color.red(),
+            timestamp=datetime.now()
+        )
+        embed.add_field(name="Usuario", value=f"{user} (`{user.id}`)", inline=False)
+        embed.add_field(name="Acción", value=action, inline=False)
+        embed.add_field(name="Razón", value=reason, inline=False)
+        await self.send_log(guild, embed)
+
+    # ============================================================
+    # BLACKLIST
+    # ============================================================
+
+    def load_blacklist(self):
+        if not os.path.exists(BLACKLIST_FILE):
+            with open(BLACKLIST_FILE, "w") as f:
+                json.dump({}, f, indent=4)
+        with open(BLACKLIST_FILE, "r") as f:
+            return json.load(f)
+
+    def save_blacklist(self, data):
+        with open(BLACKLIST_FILE, "w") as f:
+            json.dump(data, f, indent=4)
+
+    async def add_to_blacklist(self, guild, user, reason):
+        data = self.load_blacklist()
+        uid = str(user.id)
+
+        if uid not in data:
+            data[uid] = {
+                "razon": reason,
+                "fecha": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "guild": guild.id
+            }
+            self.save_blacklist(data)
+
+    # ============================================================
+    # LOCKDOWN
+    # ============================================================
+
+    async def enable_lockdown(self, guild):
+        config = get_guild_config(guild.id)
+        if config["lockdown_active"]:
+            return
+
+        config["lockdown_active"] = True
+        config["lockdown_state"] = {}
+
+        for channel in guild.channels:
             try:
-                await member.kick(reason="Cuenta demasiado nueva (Anti-Raid)")
+                ow = channel.overwrites_for(guild.default_role)
+                config["lockdown_state"][str(channel.id)] = {
+                    "send_messages": ow.send_messages,
+                    "add_reactions": ow.add_reactions
+                }
+
+                await channel.set_permissions(
+                    guild.default_role,
+                    send_messages=False,
+                    add_reactions=False
+                )
             except:
                 pass
 
-            if log_channel:
-                await log_channel.send(
-                    f"⚠️ **Cuenta nueva expulsada automáticamente**\n"
-                    f"👤 Usuario: {member.mention}\n"
-                    f"📅 Antigüedad: **{account_age_days} días** (mínimo {min_days})"
-                )
+        update_guild_config(guild.id, config)
+
+    async def disable_lockdown(self, guild):
+        config = get_guild_config(guild.id)
+        if not config["lockdown_active"]:
             return
 
-        # 2. Registrar entrada
-        self.join_times.append(now)
-        self.join_times[:] = [
-            t for t in self.join_times if now - t <= self.antiraid["time_window"]
-        ]
-
-        # 3. Detectar raid
-        if len(self.join_times) >= self.antiraid["raid_limit"]:
-
-            accion = self.antiraid["action"]
-
-            if accion == "ban":
+        for channel in guild.channels:
+            cid = str(channel.id)
+            if cid in config["lockdown_state"]:
                 try:
-                    await member.ban(reason="Raid detectado (Anti-Raid)")
+                    ow = config["lockdown_state"][cid]
+                    await channel.set_permissions(
+                        guild.default_role,
+                        send_messages=ow["send_messages"],
+                        add_reactions=ow["add_reactions"]
+                    )
                 except:
                     pass
 
-            elif accion == "kick":
-                try:
-                    await member.kick(reason="Raid detectado (Anti-Raid)")
-                except:
-                    pass
+        config["lockdown_active"] = False
+        config["lockdown_state"] = {}
+        update_guild_config(guild.id, config)
 
-            elif accion == "lockdown":
-                for channel in member.guild.channels:
-                    try:
-                        await channel.set_permissions(
-                            member.guild.default_role,
-                            send_messages=False
-                        )
-                    except:
-                        pass
+    async def auto_lockdown_check(self, guild):
+        config = get_guild_config(guild.id)
+        if not config["enabled"]:
+            return
 
-            if log_channel:
-                await log_channel.send(
-                    f"🚨 **RAID DETECTADO**\n"
-                    f"👥 Entradas en pocos segundos: **{len(self.join_times)}**\n"
-                    f"🔧 Acción ejecutada: **{accion.upper()}**"
+        risk = self.get_global_risk(guild.id)
+
+        if risk >= 200 and not config["lockdown_active"]:
+            await self.enable_lockdown(guild)
+
+        if risk < 80 and config["lockdown_active"]:
+            await self.disable_lockdown(guild)
+
+    # ============================================================
+    # AUTO-BAN
+    # ============================================================
+
+    async def punish_high_risk_users(self, guild):
+        config = get_guild_config(guild.id)
+        to_reset = []
+
+        for uid, data in config["user_risk"].items():
+            if data["risk"] < 70:
+                continue
+
+            try:
+                user = await self.bot.fetch_user(int(uid))
+            except:
+                continue
+
+            reason = " | ".join(data["reasons"])
+
+            await self.add_to_blacklist(guild, user, reason)
+
+            try:
+                await user.send(
+                    embed=discord.Embed(
+                        title="🚫 Has sido sancionado",
+                        description=f"Servidor: **{guild.name}**\nRazón: {reason}",
+                        color=discord.Color.red()
+                    )
                 )
+            except:
+                pass
 
-# ============================
+            try:
+                await guild.ban(user, reason=f"Anti-Raid: {reason}")
+                await self.log_action(guild, user, "Ban automático", reason)
+            except:
+                await self.log_action(guild, user, "Ban fallido", reason)
+
+            to_reset.append(uid)
+
+        for uid in to_reset:
+            config["user_risk"][uid]["risk"] = 0
+            config["user_risk"][uid]["reasons"] = []
+
+        update_guild_config(guild.id, config)
+
+    # ============================================================
+    # RESET / PURGA / SIMULACIÓN
+    # ============================================================
+
+    def reset_global_risk(self, guild_id: int):
+        config = get_guild_config(guild_id)
+        for uid in config["user_risk"]:
+            config["user_risk"][uid]["risk"] = 0
+            config["user_risk"][uid]["reasons"] = []
+        update_guild_config(guild_id, config)
+
+    def purge_suspicious(self, guild_id: int):
+        config = get_guild_config(guild_id)
+        to_delete = [uid for uid, data in config["user_risk"].items() if data["risk"] < 30]
+        for uid in to_delete:
+            del config["user_risk"][uid]
+        update_guild_config(guild_id, config)
+
+    def purge_antiraid(self, guild_id: int):
+        config = get_guild_config(guild_id)
+        config["join_times"] = []
+        config["user_risk"] = {}
+        config["channel_deletions"] = []
+        config["channel_creations"] = []
+        config["lockdown_active"] = False
+        config["lockdown_state"] = {}
+        update_guild_config(guild_id, config)
+
+    async def simulate_raid(self, guild):
+        config = get_guild_config(guild.id)
+        for i in range(10):
+            fake = 999000 + i
+            config["user_risk"][str(fake)] = {
+                "risk": 50,
+                "reasons": ["Simulación de raid"],
+                "messages": []
+            }
+        update_guild_config(guild.id, config)
+
+    # ============================================================
+    # PANEL COMPLETO
+    # ============================================================
+
+    class Panel(discord.ui.View):
+        def __init__(self, cog, guild):
+            super().__init__(timeout=120)
+            self.cog = cog
+            self.guild = guild
+
+        # ----------------------------
+        # BOTÓN: ACTIVAR / DESACTIVAR
+        # ----------------------------
+        @discord.ui.button(label="Activar / Desactivar", style=discord.ButtonStyle.primary)
+        async def toggle(self, interaction, button):
+            config = get_guild_config(self.guild.id)
+            config["enabled"] = not config["enabled"]
+            update_guild_config(self.guild.id, config)
+            await interaction.response.send_message(
+                f"🛡 Anti-Raid ahora está **{'activado' if config['enabled'] else 'desactivado'}**",
+                ephemeral=True
+            )
+
+        # ----------------------------
+        # BOTÓN: SENSIBILIDAD
+        # ----------------------------
+        @discord.ui.button(label="Cambiar sensibilidad", style=discord.ButtonStyle.secondary)
+        async def sensitivity(self, interaction, button):
+            config = get_guild_config(self.guild.id)
+            order = ["low", "medium", "high"]
+            new = order[(order.index(config["settings"]["sensitivity"]) + 1) % 3]
+            config["settings"]["sensitivity"] = new
+            update_guild_config(self.guild.id, config)
+            await interaction.response.send_message(f"📊 Sensibilidad cambiada a **{new}**", ephemeral=True)
+
+        # ----------------------------
+        # BOTÓN: VER RIESGO
+        # ----------------------------
+        @discord.ui.button(label="Ver riesgo global", style=discord.ButtonStyle.secondary)
+        async def risk(self, interaction, button):
+            risk = self.cog.get_global_risk(self.guild.id)
+            await interaction.response.send_message(f"📊 Riesgo global: **{risk}**", ephemeral=True)
+
+        # ----------------------------
+        # BOTÓN: CONFIGURAR LOGS
+        # ----------------------------
+        @discord.ui.button(label="Configurar logs", style=discord.ButtonStyle.success)
+        async def logs(self, interaction, button):
+            await interaction.response.send_message("📘 Menciona el canal de logs.", ephemeral=True)
+
+            def check(msg):
+                return msg.author.id == interaction.user.id and msg.guild.id == self.guild.id
+
+            try:
+                msg = await self.cog.bot.wait_for("message", check=check, timeout=30)
+                if msg.channel_mentions:
+                    ch = msg.channel_mentions[0]
+                    config = get_guild_config(self.guild.id)
+                    config["log_channel"] = ch.id
+                    update_guild_config(self.guild.id, config)
+                    await msg.reply(f"📘 Canal de logs configurado en {ch.mention}")
+                else:
+                    await msg.reply("❌ No mencionaste ningún canal.")
+            except:
+                await interaction.followup.send("⏳ Tiempo agotado.", ephemeral=True)
+
+        # ----------------------------
+        # BOTÓN: LOCKDOWN ON
+        # ----------------------------
+        @discord.ui.button(label="Activar Lockdown", style=discord.ButtonStyle.danger)
+        async def lock_on(self, interaction, button):
+            await self.cog.enable_lockdown(self.guild)
+            await interaction.response.send_message("🔒 Lockdown activado.", ephemeral=True)
+
+        # ----------------------------
+        # BOTÓN: LOCKDOWN OFF
+        # ----------------------------
+        @discord.ui.button(label="Desactivar Lockdown", style=discord.ButtonStyle.success)
+        async def lock_off(self, interaction, button):
+            await self.cog.disable_lockdown(self.guild)
+            await interaction.response.send_message("🔓 Lockdown desactivado.", ephemeral=True)
+
+        # ----------------------------
+        # BOTÓN: SOSPECHOSOS
+        # ----------------------------
+        @discord.ui.button(label="Usuarios sospechosos", style=discord.ButtonStyle.secondary)
+        async def suspicious(self, interaction, button):
+            config = get_guild_config(self.guild.id)
+            suspects = [
+                f"<@{uid}> — Riesgo: {data['risk']}"
+                for uid, data in config["user_risk"].items()
+                if data["risk"] >= 30
+            ]
+
+            if not suspects:
+                await interaction.response.send_message("✨ No hay usuarios sospechosos.", ephemeral=True)
+                return
+
+            await interaction.response.send_message(
+                "🚨 **Usuarios sospechosos:**\n" + "\n".join(suspects),
+                ephemeral=True
+            )
+
+        # ----------------------------
+        # BOTÓN: RESET RIESGO GLOBAL
+        # ----------------------------
+        @discord.ui.button(label="Reset riesgo global", style=discord.ButtonStyle.danger)
+        async def reset_risk(self, interaction, button):
+            self.cog.reset_global_risk(self.guild.id)
+            await interaction.response.send_message("🧹 Riesgo global reseteado.", ephemeral=True)
+
+        # ----------------------------
+        # BOTÓN: PURGAR SOSPECHOSOS
+        # ----------------------------
+        @discord.ui.button(label="Purgar sospechosos", style=discord.ButtonStyle.secondary)
+        async def purge_sus(self, interaction, button):
+            self.cog.purge_suspicious(self.guild.id)
+            await interaction.response.send_message("🗑 Usuarios sospechosos purgados.", ephemeral=True)
+
+        # ----------------------------
+        # BOTÓN: RESET TOTAL
+        # ----------------------------
+        @discord.ui.button(label="Reset total Anti-Raid", style=discord.ButtonStyle.danger)
+        async def purge_all(self, interaction, button):
+            self.cog.purge_antiraid(self.guild.id)
+            await interaction.response.send_message("🧨 Anti-Raid reseteado completamente.", ephemeral=True)
+
+        # ----------------------------
+        # BOTÓN: SIMULAR RAID
+        # ----------------------------
+        @discord.ui.button(label="Simular raid", style=discord.ButtonStyle.primary)
+        async def simulate(self, interaction, button):
+            await self.cog.simulate_raid(self.guild)
+            await interaction.response.send_message("🧪 Simulación de raid ejecutada.", ephemeral=True)
+
+    # ============================================================
+    # SLASH COMMAND PRINCIPAL: PANEL
+    # ============================================================
+
+    @app_commands.command(name="antiraid", description="Abrir panel Anti-Raid (solo admins).")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def antiraid(self, interaction: discord.Interaction):
+        config = get_guild_config(interaction.guild.id)
+
+        embed = discord.Embed(
+            title="🛡 Panel Anti-Raid",
+            description="Controla todo el sistema Anti-Raid desde aquí.",
+            color=discord.Color.blue()
+        )
+        embed.add_field(name="Estado", value="Activado" if config["enabled"] else "Desactivado")
+        embed.add_field(name="Sensibilidad", value=config["settings"]["sensitivity"])
+        embed.add_field(name="Riesgo global", value=str(self.get_global_risk(interaction.guild.id)))
+
+        await interaction.response.send_message(
+            embed=embed,
+            view=self.Panel(self, interaction.guild),
+            ephemeral=True
+        )
+
+    # ============================================================
+    # SLASH COMMAND SETUP
+    # ============================================================
+
+    @app_commands.command(name="antiraid_setup", description="Inicializa el Anti-Raid en este servidor.")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def antiraid_setup(self, interaction: discord.Interaction):
+        guild = interaction.guild
+
+        # Crear canal de logs si no existe
+        log_channel = discord.utils.get(guild.text_channels, name="antiraid-logs")
+        if not log_channel:
+            log_channel = await guild.create_text_channel("antiraid-logs")
+
+        config = get_guild_config(guild.id)
+        config["log_channel"] = log_channel.id
+        update_guild_config(guild.id, config)
+
+        embed = discord.Embed(
+            title="🛡 Anti-Raid configurado",
+            description="El sistema Anti-Raid ha sido inicializado correctamente.",
+            color=discord.Color.green()
+        )
+        embed.add_field(name="Canal de logs", value=log_channel.mention)
+        embed.add_field(name="Comando principal", value="`/antiraid`")
+
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
+# ============================================================
 # SETUP DEL COG
-# ============================
+# ============================================================
 
 async def setup(bot):
-    await bot.add_cog(AntiRaidCog(bot))
+    await bot.add_cog(AntiRaid(bot))
