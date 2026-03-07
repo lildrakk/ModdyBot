@@ -177,7 +177,7 @@ class AntiLinksCog(commands.Cog):
             )
 
     # ============================
-    # SELECTS (TU SISTEMA)
+    # SELECTS (CORREGIDOS)
     # ============================
 
     def select_roles_allowed(self, guild: discord.Guild, guild_id: str):
@@ -201,7 +201,7 @@ class AntiLinksCog(commands.Cog):
         )
 
     def select_whitelist_users(self, guild: discord.Guild, guild_id: str):
-        allowed = self.config[guild[guild_id]["whitelist_users"]]
+        allowed = self.config[guild_id]["whitelist_users"]
 
         options = [
             discord.SelectOption(
@@ -278,11 +278,71 @@ class AntiLinksCog(commands.Cog):
             max_values=min(len(options), 25),
             options=options[:25],
             custom_id="select_allowed_servers"
-        )
-
+    )
 
 
 # ============================
+    # BOTONES PRINCIPALES
+    # ============================
+
+    def main_buttons(self, guild_id: str, page: int):
+
+        cfg = self.config[guild_id]
+
+        # Botón activar/desactivar
+        btn_enable = discord.ui.Button(
+            label="🟢 Activado" if cfg["enabled"] else "🔴 Desactivado",
+            style=discord.ButtonStyle.green if cfg["enabled"] else discord.ButtonStyle.red,
+            custom_id="toggle_enabled"
+        )
+
+        # Botón guardar
+        btn_save = discord.ui.Button(
+            label="💾 Guardar",
+            style=discord.ButtonStyle.blurple,
+            custom_id="save_antilinks"
+        )
+
+        # Botón test (solo página 6)
+        btn_test = None
+        if page == 6:
+            btn_test = discord.ui.Button(
+                label="🧪 Test Anti‑Links",
+                style=discord.ButtonStyle.gray,
+                custom_id="test_antilinks"
+            )
+
+        return btn_enable, btn_save, btn_test
+
+    # ============================
+    # BOTONES DE NAVEGACIÓN
+    # ============================
+
+    def nav_buttons(self, page: int):
+
+        buttons = []
+
+        if page > 1:
+            buttons.append(
+                discord.ui.Button(
+                    label="⬅ Anterior",
+                    style=discord.ButtonStyle.secondary,
+                    custom_id="prev_page"
+                )
+            )
+
+        if page < 6:
+            buttons.append(
+                discord.ui.Button(
+                    label="Siguiente ➡",
+                    style=discord.ButtonStyle.secondary,
+                    custom_id="next_page"
+                )
+            )
+
+        return buttons
+
+    # ============================
     # PANEL PRINCIPAL
     # ============================
 
@@ -539,7 +599,7 @@ class AntiLinksCog(commands.Cog):
         )
 
 # ============================
-# SETUP DEL COG
+# SETUP FINAL DEL COG
 # ============================
 
 async def setup(bot):
