@@ -166,6 +166,62 @@ class AntiSpamCog(commands.Cog):
     # PANEL
     # ============================
 
+    # BOTONES PRINCIPALES (AÑADIDOS)
+    def spam_main_buttons(self, guild_id: str, page: int):
+
+        cfg = self.config[guild_id]
+
+        # Activar / desactivar Anti‑Spam
+        btn_enable = discord.ui.Button(
+            label="🟢 Activado" if cfg["enabled"] else "🔴 Desactivado",
+            style=discord.ButtonStyle.green if cfg["enabled"] else discord.ButtonStyle.red,
+            custom_id="spam_toggle_enabled"
+        )
+
+        # Guardar configuración
+        btn_save = discord.ui.Button(
+            label="💾 Guardar",
+            style=discord.ButtonStyle.blurple,
+            custom_id="spam_save_antispam"
+        )
+
+        # Test Anti‑Spam (solo página 6)
+        btn_test = None
+        if page == 6:
+            btn_test = discord.ui.Button(
+                label="🧪 Test Anti‑Spam",
+                style=discord.ButtonStyle.gray,
+                custom_id="spam_test_antispam"
+            )
+
+        return btn_enable, btn_save, btn_test
+
+    # BOTONES DE NAVEGACIÓN (AÑADIDOS)
+    def spam_nav_buttons(self, page: int):
+
+        buttons = []
+
+        if page > 1:
+            buttons.append(
+                discord.ui.Button(
+                    label="⬅ Anterior",
+                    style=discord.ButtonStyle.secondary,
+                    custom_id="spam_prev_page"
+                )
+            )
+
+        if page < 6:
+            buttons.append(
+                discord.ui.Button(
+                    label="Siguiente ➡",
+                    style=discord.ButtonStyle.secondary,
+                    custom_id="spam_next_page"
+                )
+            )
+
+        return buttons
+
+    # PANEL PRINCIPAL
     async def spam_build_panel(self, interaction, page):
         guild = interaction.guild
         guild_id = str(guild.id)
@@ -297,6 +353,10 @@ class AntiSpamCog(commands.Cog):
 
     async def spam_update_panel(self, interaction, page):
         await self.spam_build_panel(interaction, page)
+
+  
+
+
 
     # ============================
     # SLASH COMMAND
