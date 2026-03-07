@@ -12,14 +12,56 @@ class Roles(commands.Cog):
         self.bot = bot
 
     # ============================
+    # FUNCIONES DE PERMISOS
+    # ============================
+
+    def check_user_permissions(self, interaction):
+        if not interaction.user.guild_permissions.manage_roles:
+            return "❌ No tienes permisos para gestionar roles."
+        return None
+
+    def check_bot_permissions(self, interaction):
+        if not interaction.guild.me.guild_permissions.manage_roles:
+            return "❌ No tengo permisos para gestionar roles."
+        return None
+
+    def check_role_hierarchy(self, interaction, usuario, rol):
+        # El usuario no puede modificar roles superiores a los suyos
+        if rol.position >= interaction.user.top_role.position and interaction.user != interaction.guild.owner:
+            return "❌ No puedes gestionar un rol igual o superior al tuyo."
+
+        # El bot no puede modificar roles superiores a los suyos
+        if rol.position >= interaction.guild.me.top_role.position:
+            return "❌ Mi rol está por debajo del rol que intentas gestionar."
+
+        # No permitir dar o quitar roles superiores al usuario objetivo
+        if usuario.top_role.position > interaction.user.top_role.position and interaction.user != interaction.guild.owner:
+            return "❌ No puedes modificar roles de alguien con un rol superior al tuyo."
+
+        return None
+
+    # ============================
     # ROLE ADD
     # ============================
 
     @app_commands.command(name="roleadd", description="Añade un rol a un usuario")
     @app_commands.describe(usuario="Usuario al que dar el rol", rol="Rol que quieres añadir")
     async def roleadd(self, interaction: discord.Interaction, usuario: discord.Member, rol: discord.Role):
-        if not interaction.user.guild_permissions.manage_roles:
-            return await interaction.response.send_message("❌ No tienes permisos.", ephemeral=True)
+
+        # Permisos del usuario
+        error = self.check_user_permissions(interaction)
+        if error:
+            return await interaction.response.send_message(error, ephemeral=True)
+
+        # Permisos del bot
+        error = self.check_bot_permissions(interaction)
+        if error:
+            return await interaction.response.send_message(error, ephemeral=True)
+
+        # Jerarquía
+        error = self.check_role_hierarchy(interaction, usuario, rol)
+        if error:
+            return await interaction.response.send_message(error, ephemeral=True)
 
         try:
             await usuario.add_roles(rol)
@@ -40,13 +82,26 @@ class Roles(commands.Cog):
     @app_commands.command(name="roleremove", description="Quita un rol a un usuario")
     @app_commands.describe(usuario="Usuario al que quitar el rol", rol="Rol que quieres remover")
     async def roleremove(self, interaction: discord.Interaction, usuario: discord.Member, rol: discord.Role):
-        if not interaction.user.guild_permissions.manage_roles:
-            return await interaction.response.send_message("❌ No tienes permisos.", ephemeral=True)
+
+        # Permisos del usuario
+        error = self.check_user_permissions(interaction)
+        if error:
+            return await interaction.response.send_message(error, ephemeral=True)
+
+        # Permisos del bot
+        error = self.check_bot_permissions(interaction)
+        if error:
+            return await interaction.response.send_message(error, ephemeral=True)
+
+        # Jerarquía
+        error = self.check_role_hierarchy(interaction, usuario, rol)
+        if error:
+            return await interaction.response.send_message(error, ephemeral=True)
 
         try:
             await usuario.remove_roles(rol)
             await interaction.response.send_message(
-                f"❌ Rol **{rol.name}** removido de {usuario.mention}.",
+                f"🗑️ Rol **{rol.name}** removido de {usuario.mention}.",
                 ephemeral=True
             )
         except discord.Forbidden:
@@ -77,8 +132,21 @@ class Roles(commands.Cog):
     @app_commands.command(name="temproleadd", description="Añade un rol temporal a un usuario (persistente)")
     @app_commands.describe(usuario="Usuario", rol="Rol a añadir", minutos="Duración en minutos")
     async def temproleadd(self, interaction: discord.Interaction, usuario: discord.Member, rol: discord.Role, minutos: int):
-        if not interaction.user.guild_permissions.manage_roles:
-            return await interaction.response.send_message("❌ No tienes permisos.", ephemeral=True)
+
+        # Permisos del usuario
+        error = self.check_user_permissions(interaction)
+        if error:
+            return await interaction.response.send_message(error, ephemeral=True)
+
+        # Permisos del bot
+        error = self.check_bot_permissions(interaction)
+        if error:
+            return await interaction.response.send_message(error, ephemeral=True)
+
+        # Jerarquía
+        error = self.check_role_hierarchy(interaction, usuario, rol)
+        if error:
+            return await interaction.response.send_message(error, ephemeral=True)
 
         # Añadir rol
         try:
@@ -113,8 +181,21 @@ class Roles(commands.Cog):
     @app_commands.command(name="temproleremove", description="Quita un rol temporal antes de que expire")
     @app_commands.describe(usuario="Usuario", rol="Rol a quitar")
     async def temproleremove(self, interaction: discord.Interaction, usuario: discord.Member, rol: discord.Role):
-        if not interaction.user.guild_permissions.manage_roles:
-            return await interaction.response.send_message("❌ No tienes permisos.", ephemeral=True)
+
+        # Permisos del usuario
+        error = self.check_user_permissions(interaction)
+        if error:
+            return await interaction.response.send_message(error, ephemeral=True)
+
+        # Permisos del bot
+        error = self.check_bot_permissions(interaction)
+        if error:
+            return await interaction.response.send_message(error, ephemeral=True)
+
+        # Jerarquía
+        error = self.check_role_hierarchy(interaction, usuario, rol)
+        if error:
+            return await interaction.response.send_message(error, ephemeral=True)
 
         try:
             await usuario.remove_roles(rol)
@@ -177,7 +258,6 @@ class Roles(commands.Cog):
                 self.save_temproles(data)
 
             await asyncio.sleep(30)
-
 
 
 async def setup(bot):
