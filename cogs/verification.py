@@ -10,6 +10,10 @@ import io
 
 VERIFICATION_FILE = "verification.json"
 
+# ============================
+# JSON
+# ============================
+
 def load_verification():
     if not os.path.exists(VERIFICATION_FILE):
         with open(VERIFICATION_FILE, "w") as f:
@@ -21,25 +25,65 @@ def save_verification(data):
     with open(VERIFICATION_FILE, "w") as f:
         json.dump(data, f, indent=4)
 
+# ============================
+# CAPTCHA MEJORADO
+# ============================
+
 def generar_captcha():
-    letras = string.ascii_letters
+    letras = string.ascii_letters + string.digits
     codigo = ''.join(random.choice(letras) for _ in range(6))
 
-    img = Image.new("RGB", (300, 120), "white")
+    width, height = 400, 150
+    img = Image.new("RGB", (width, height), (30, 30, 30))
     draw = ImageDraw.Draw(img)
 
+    # Líneas de color
+    for i in range(12):
+        x1 = random.randint(0, width)
+        y1 = random.randint(0, height)
+        x2 = random.randint(0, width)
+        y2 = random.randint(0, height)
+        draw.line(
+            (x1, y1, x2, y2),
+            fill=(random.randint(50, 150), random.randint(50, 150), random.randint(50, 150)),
+            width=3
+        )
+
+    # Fuente grande
     try:
-        font = ImageFont.truetype("arial.ttf", 48)
+        font = ImageFont.truetype("arial.ttf", 70)
     except:
         font = ImageFont.load_default()
 
-    draw.text((40, 30), codigo, font=font, fill="black")
+    # Centrar texto
+    text_width, text_height = draw.textsize(codigo, font=font)
+    x = (width - text_width) // 2
+    y = (height - text_height) // 2
+
+    # Sombra
+    draw.text((x+3, y+3), codigo, font=font, fill=(0, 0, 0))
+
+    # Texto principal
+    draw.text((x, y), codigo, font=font, fill=(255, 255, 255))
+
+    # Ruido
+    for _ in range(300):
+        px = random.randint(0, width - 1)
+        py = random.randint(0, height - 1)
+        draw.point(
+            (px, py),
+            fill=(random.randint(100, 255), random.randint(100, 255), random.randint(100, 255))
+        )
 
     buffer = io.BytesIO()
     img.save(buffer, format="PNG")
     buffer.seek(0)
 
     return codigo, buffer
+
+# ============================
+# MODAL CAPTCHA
+# ============================
 
 class CaptchaModal(discord.ui.Modal, title="Verificación con Captcha"):
     def __init__(self, codigo_correcto, rol_dar, rol_quitar):
@@ -66,6 +110,10 @@ class CaptchaModal(discord.ui.Modal, title="Verificación con Captcha"):
         else:
             await interaction.response.send_message("❌ Código incorrecto.", ephemeral=True)
 
+# ============================
+# BOTÓN DE VERIFICACIÓN
+# ============================
+
 class VerifyButtonItem(discord.ui.Button):
     def __init__(self, panel_id, label):
         super().__init__(
@@ -84,6 +132,9 @@ class VerifyButton(discord.ui.View):
         super().__init__(timeout=None)
         self.add_item(VerifyButtonItem(panel_id, label))
 
+# ============================
+# COG PRINCIPAL
+# ============================
 
 class VerificationCog(commands.Cog):
     def __init__(self, bot):
@@ -94,6 +145,10 @@ class VerificationCog(commands.Cog):
             for panel_id, cfg in data[guild_id].items():
                 label = cfg.get("boton", "Verificar")
                 bot.add_view(VerifyButton(panel_id, label))
+
+    # ============================
+    # CREAR PANEL
+    # ============================
 
     @app_commands.command(
         name="verificacion_crear",
@@ -156,13 +211,13 @@ class VerificationCog(commands.Cog):
         await canal.send(embed=embed, view=view)
         await interaction.response.send_message("✅ Panel creado.", ephemeral=True)
 
+    # ============================
+    # ENVIAR PANEL EXISTENTE
+    # ============================
+
     @app_commands.command(
         name="verificacion_enviar",
         description="Enviar un panel de verificación ya existente"
-    )
-    @app_commands.describe(
-        panel_id="ID del panel ya creado",
-        canal="Canal donde se enviará el panel"
     )
     async def verificacion_enviar(
         self,
@@ -191,6 +246,10 @@ class VerificationCog(commands.Cog):
         await canal.send(embed=embed, view=view)
         await interaction.response.send_message("✅ Panel enviado correctamente.", ephemeral=True)
 
+    # ============================
+    # INTERACCIÓN DEL BOTÓN
+    # ============================
+
     @commands.Cog.listener()
     async def on_interaction(self, interaction: discord.Interaction):
 
@@ -215,10 +274,11 @@ class VerificationCog(commands.Cog):
         rol_quitar = interaction.guild.get_role(cfg["rol_quitar"])
         tipo = cfg["tipo"]
 
-        # Si ya está verificado
+        # Ya verificado
         if rol_dar in interaction.user.roles:
             return await interaction.response.send_message("✅ Ya estás verificado.", ephemeral=True)
 
+        # Verificación normal
         if tipo == "normal":
             try:
                 await interaction.user.remove_roles(rol_quitar)
@@ -227,6 +287,7 @@ class VerificationCog(commands.Cog):
             except:
                 return await interaction.response.send_message("❌ No pude asignar los roles.", ephemeral=True)
 
+        # Verificación con CAPTCHA
         codigo, imagen = generar_captcha()
 
         embed = discord.Embed(
@@ -282,6 +343,10 @@ class VerificationCog(commands.Cog):
             view=view,
             ephemeral=True
         )
+
+# ============================
+# SETUP
+# ============================
 
 async def setup(bot):
     await bot.add_cog(VerificationCog(bot))
