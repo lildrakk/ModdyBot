@@ -27,7 +27,7 @@ def save_welcome(data):
 
 
 # ============================
-# COG DE BIENVENIDA EN CANAL
+# COG DE BIENVENIDA
 # ============================
 
 class WelcomeChannelCog(commands.Cog):
@@ -42,12 +42,12 @@ class WelcomeChannelCog(commands.Cog):
 
     @app_commands.command(
         name="setwelcome",
-        description="Configura la bienvenida en canal del servidor"
+        description="Configura la bienvenida del servidor"
     )
     @app_commands.describe(
         canal="Canal donde se enviará la bienvenida",
         mensaje="Mensaje de bienvenida (usa {user} y {server})",
-        imagen="URL de la imagen de bienvenida"
+        imagen="URL de la imagen de bienvenida (opcional si adjuntas una imagen)"
     )
     async def setwelcome(
         self,
@@ -63,19 +63,30 @@ class WelcomeChannelCog(commands.Cog):
                 ephemeral=True
             )
 
+        # Recargar JSON siempre
+        self.welcome_config = load_welcome()
+
         guild_id = str(interaction.guild.id)
 
         if guild_id not in self.welcome_config:
             self.welcome_config[guild_id] = {}
 
+        # Canal
         if canal:
             self.welcome_config[guild_id]["welcome_channel"] = str(canal.id)
 
+        # Mensaje
         if mensaje:
             self.welcome_config[guild_id]["welcome_message"] = mensaje
 
+        # Imagen por URL
         if imagen:
             self.welcome_config[guild_id]["welcome_image"] = imagen
+
+        # Imagen adjunta desde Discord
+        if interaction.attachments:
+            archivo = interaction.attachments[0]
+            self.welcome_config[guild_id]["welcome_image"] = archivo.url
 
         save_welcome(self.welcome_config)
 
@@ -92,9 +103,11 @@ class WelcomeChannelCog(commands.Cog):
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
 
+        # Recargar JSON SIEMPRE para evitar que se pierda al reiniciar
+        self.welcome_config = load_welcome()
+
         guild_id = str(member.guild.id)
 
-        # Si no hay configuración → no hacemos nada
         if guild_id not in self.welcome_config:
             return
 
@@ -108,29 +121,25 @@ class WelcomeChannelCog(commands.Cog):
         if not canal:
             return
 
-        # Mensaje de bienvenida
+        # Mensaje de bienvenida (TEXTO NORMAL, NO EMBED)
         mensaje = config.get(
             "welcome_message",
             "🎉 Bienvenido {user} a **{server}**!"
         )
 
-        # Reemplazos
-        mensaje = mensaje.replace("{user}", member.mention)  # PING REAL
+        mensaje = mensaje.replace("{user}", member.mention)
         mensaje = mensaje.replace("{server}", member.guild.name)
 
-        # Embed
-        embed = discord.Embed(
-            description=mensaje,
-            color=0x00ffcc
-        )
-
-        # Imagen personalizada
+        # Imagen (URL o adjunta)
         imagen = config.get("welcome_image")
-        if imagen:
-            embed.set_image(url=imagen)
 
         try:
-            await canal.send(embed=embed)
+            if imagen:
+                await canal.send(mensaje)
+                await canal.send(imagen)  # Imagen grande abajo
+            else:
+                await canal.send(mensaje)
+
         except:
             pass
 
