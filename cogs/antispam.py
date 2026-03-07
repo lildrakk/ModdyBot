@@ -8,7 +8,6 @@ from datetime import timedelta
 
 ANTISPAM_FILE = "antispam.json"
 
-
 def load_antispam():
     if not os.path.exists(ANTISPAM_FILE):
         with open(ANTISPAM_FILE, "w") as f:
@@ -20,7 +19,6 @@ def load_antispam():
             return json.load(f)
         except:
             return {}
-
 
 def save_antispam(data):
     with open(ANTISPAM_FILE, "w") as f:
@@ -39,7 +37,7 @@ class AntiSpamCog(commands.Cog):
         self.panel_message = {}
 
     # ============================
-    # CONFIG
+    # CONFIG POR SERVIDOR
     # ============================
 
     def ensure_guild_config(self, guild_id: str):
@@ -49,14 +47,20 @@ class AntiSpamCog(commands.Cog):
                 "action": "mute",
                 "mute_time": 600,
                 "progressive": False,
+
                 "allowed_roles": [],
                 "whitelist_users": [],
                 "whitelist_roles": [],
                 "whitelist_channels": [],
+
                 "flood": {"max_messages": 5, "interval": 4},
                 "caps": {"enabled": True, "max_caps": 70},
                 "repeat": {"enabled": True, "max_repeat": 3},
-                "cooldown": 3
+
+                "cooldown": 3,
+
+                # NUEVO: canal de logs Anti‑Spam
+                "log_channel": None
             }
             save_antispam(self.config)
         return self.config[guild_id]
@@ -98,7 +102,7 @@ class AntiSpamCog(commands.Cog):
             )
         return discord.Embed(
             title="🔧 Opciones avanzadas",
-            description="Cooldown, modo progresivo y test Anti‑Spam.",
+            description="Cooldown, modo progresivo, logs y test Anti‑Spam.",
             color=discord.Color.magenta()
         )
 
@@ -162,30 +166,45 @@ class AntiSpamCog(commands.Cog):
             custom_id="spam_select_whitelist_channels"
         )
 
+    # NUEVO: SELECT DE CANAL DE LOGS
+    def spam_select_log_channel(self, guild, guild_id):
+        current = self.config[guild_id]["log_channel"]
+        options = [
+            discord.SelectOption(
+                label=c.name,
+                value=str(c.id),
+                default=(c.id == current)
+            )
+            for c in guild.text_channels
+        ][:25]
+
+        return discord.ui.Select(
+            placeholder="Selecciona canal de logs Anti‑Spam",
+            min_values=1,
+            max_values=1,
+            options=options,
+            custom_id="spam_select_log_channel"
+        )
+
     # ============================
-    # PANEL
+    # BOTONES PRINCIPALES
     # ============================
 
-    # BOTONES PRINCIPALES (AÑADIDOS)
     def spam_main_buttons(self, guild_id: str, page: int):
-
         cfg = self.config[guild_id]
 
-        # Activar / desactivar Anti‑Spam
         btn_enable = discord.ui.Button(
             label="🟢 Activado" if cfg["enabled"] else "🔴 Desactivado",
             style=discord.ButtonStyle.green if cfg["enabled"] else discord.ButtonStyle.red,
             custom_id="spam_toggle_enabled"
         )
 
-        # Guardar configuración
         btn_save = discord.ui.Button(
             label="💾 Guardar",
             style=discord.ButtonStyle.blurple,
             custom_id="spam_save_antispam"
         )
 
-        # Test Anti‑Spam (solo página 6)
         btn_test = None
         if page == 6:
             btn_test = discord.ui.Button(
@@ -196,9 +215,11 @@ class AntiSpamCog(commands.Cog):
 
         return btn_enable, btn_save, btn_test
 
-    # BOTONES DE NAVEGACIÓN (AÑADIDOS)
-    def spam_nav_buttons(self, page: int):
+    # ============================
+    # BOTONES DE NAVEGACIÓN
+    # ============================
 
+    def spam_nav_buttons(self, page: int):
         buttons = []
 
         if page > 1:
@@ -221,142 +242,14 @@ class AntiSpamCog(commands.Cog):
 
         return buttons
 
-    # PANEL PRINCIPAL
-    async def spam_build_panel(self, interaction, page):
-        guild = interaction.guild
-        guild_id = str(guild.id)
-        cfg = self.ensure_guild_config(guild_id)
-        self.user_pages[interaction.user.id] = page
 
-        embed = self.spam_embed_page(page)
-        view = discord.ui.View(timeout=300)
 
-        view.add_item(discord.ui.Button(label="🔒 Cerrar panel", style=discord.ButtonStyle.red, custom_id="spam_close_panel"))
-
-        # Página 1
-        if page == 1:
-            embed.add_field(name="Estado", value="🟢 Activado" if cfg["enabled"] else "🔴 Desactivado", inline=False)
-            embed.add_field(name="Acción", value=cfg["action"], inline=False)
-            embed.add_field(name="Tiempo de mute", value=f"{cfg['mute_time']}s", inline=False)
-            embed.add_field(name="Modo progresivo", value="Sí" if cfg["progressive"] else "No", inline=False)
-
-            view.add_item(self.spam_select_allowed_roles(guild, guild_id))
-
-            btn_enable, btn_save, _ = self.spam_main_buttons(guild_id, page)
-            view.add_item(btn_enable)
-            view.add_item(discord.ui.Button(label="Cambiar acción", style=discord.ButtonStyle.blurple, custom_id="spam_change_action"))
-            view.add_item(discord.ui.Button(label="Cambiar tiempo mute", style=discord.ButtonStyle.blurple, custom_id="spam_change_mute_time"))
-            view.add_item(discord.ui.Button(label="Modo progresivo", style=discord.ButtonStyle.gray, custom_id="spam_toggle_progressive"))
-            view.add_item(btn_save)
-
-        # Página 2 — Flood
-        elif page == 2:
-            embed.add_field(name="Máx. mensajes", value=str(cfg["flood"]["max_messages"]), inline=False)
-            embed.add_field(name="Intervalo (s)", value=str(cfg["flood"]["interval"]), inline=False)
-
-            view.add_item(discord.ui.Button(label="Cambiar máx. mensajes", style=discord.ButtonStyle.blurple, custom_id="spam_change_flood_max"))
-            view.add_item(discord.ui.Button(label="Cambiar intervalo", style=discord.ButtonStyle.blurple, custom_id="spam_change_flood_interval"))
-
-            btn_enable, btn_save, _ = self.spam_main_buttons(guild_id, page)
-            view.add_item(btn_enable)
-            view.add_item(btn_save)
-
-        # Página 3 — Mayúsculas
-        elif page == 3:
-            embed.add_field(name="Detectar mayúsculas", value="Sí" if cfg["caps"]["enabled"] else "No", inline=False)
-            embed.add_field(name="Máx. % permitido", value=f"{cfg['caps']['max_caps']}%", inline=False)
-
-            view.add_item(discord.ui.Button(label="Toggle mayúsculas", style=discord.ButtonStyle.gray, custom_id="spam_toggle_caps"))
-            view.add_item(discord.ui.Button(label="Cambiar % máximo", style=discord.ButtonStyle.blurple, custom_id="spam_change_caps_max"))
-
-            btn_enable, btn_save, _ = self.spam_main_buttons(guild_id, page)
-            view.add_item(btn_enable)
-            view.add_item(btn_save)
-
-        # Página 4 — Repetición
-        elif page == 4:
-            embed.add_field(name="Detectar repetición", value="Sí" if cfg["repeat"]["enabled"] else "No", inline=False)
-            embed.add_field(name="Máx. repeticiones", value=str(cfg["repeat"]["max_repeat"]), inline=False)
-
-            view.add_item(discord.ui.Button(label="Toggle repetición", style=discord.ButtonStyle.gray, custom_id="spam_toggle_repeat"))
-            view.add_item(discord.ui.Button(label="Cambiar repeticiones", style=discord.ButtonStyle.blurple, custom_id="spam_change_repeat_max"))
-
-            btn_enable, btn_save, _ = self.spam_main_buttons(guild_id, page)
-            view.add_item(btn_enable)
-            view.add_item(btn_save)
-
-        # Página 5 — Whitelist
-        elif page == 5:
-            embed.add_field(
-                name="Usuarios permitidos",
-                value=", ".join([f"<@{u}>" for u in cfg['whitelist_users']]) or "Ninguno",
-                inline=False
-            )
-            embed.add_field(
-                name="Roles permitidos",
-                value=", ".join([f"<@&{r}>" for r in cfg['whitelist_roles']]) or "Ninguno",
-                inline=False
-            )
-            embed.add_field(
-                name="Canales permitidos",
-                value=", ".join([f"<#{c}>" for c in cfg['whitelist_channels']]) or "Ninguno",
-                inline=False
-            )
-
-            view.add_item(self.spam_select_whitelist_users(guild, guild_id))
-            view.add_item(self.spam_select_whitelist_roles(guild, guild_id))
-            view.add_item(self.spam_select_whitelist_channels(guild, guild_id))
-
-            btn_enable, btn_save, _ = self.spam_main_buttons(guild_id, page)
-            view.add_item(btn_enable)
-            view.add_item(btn_save)
-
-        # Página 6 — Opciones avanzadas
-        elif page == 6:
-            embed.add_field(name="Cooldown por usuario", value=f"{cfg['cooldown']}s", inline=False)
-            embed.add_field(name="Modo progresivo", value="Sí" if cfg["progressive"] else "No", inline=False)
-
-            view.add_item(discord.ui.Button(label="Cambiar cooldown", style=discord.ButtonStyle.blurple, custom_id="spam_change_cooldown"))
-            view.add_item(discord.ui.Button(label="Modo progresivo", style=discord.ButtonStyle.gray, custom_id="spam_toggle_progressive"))
-
-            btn_enable, btn_save, btn_test = self.spam_main_buttons(guild_id, page)
-            view.add_item(btn_enable)
-            view.add_item(btn_save)
-            if btn_test:
-                view.add_item(btn_test)
-
-        # Navegación
-        for btn in self.spam_nav_buttons(page):
-            view.add_item(btn)
-
-        # Crear o editar panel
-        if guild_id not in self.panel_message:
-            sent = await interaction.channel.send(
-                "**Panel Anti‑Spam — Configuración del servidor**",
-                embed=embed,
-                view=view
-            )
-            self.panel_message[guild_id] = sent.id
-            self.panel_owner[guild_id] = interaction.user.id
-        else:
-            try:
-                msg = await interaction.channel.fetch_message(self.panel_message[guild_id])
-                await msg.edit(embed=embed, view=view)
-            except discord.NotFound:
-                sent = await interaction.channel.send(
-                    "**Panel Anti‑Spam — Configuración del servidor**",
-                    embed=embed,
-                    view=view
-                )
-                self.panel_message[guild_id] = sent.id
-                self.panel_owner[guild_id] = interaction.user.id
+# ============================
+    # ACTUALIZAR PANEL
+    # ============================
 
     async def spam_update_panel(self, interaction, page):
         await self.spam_build_panel(interaction, page)
-
-  
-
-
 
     # ============================
     # SLASH COMMAND
@@ -370,7 +263,7 @@ class AntiSpamCog(commands.Cog):
 
         guild = interaction.guild
         guild_id = str(guild.id)
-        cfg = self.ensure_guild_config(guild_id)
+        self.ensure_guild_config(guild_id)
 
         if not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message(
@@ -388,7 +281,7 @@ class AntiSpamCog(commands.Cog):
         await self.spam_build_panel(interaction, 1)
 
     # ============================
-    # INTERACCIONES
+    # INTERACCIONES DEL PANEL
     # ============================
 
     @commands.Cog.listener()
@@ -403,16 +296,23 @@ class AntiSpamCog(commands.Cog):
         guild = interaction.guild
         guild_id = str(guild.id)
         user = interaction.user
+        cfg = self.ensure_guild_config(guild_id)
 
+        # Protección del panel
         if guild_id in self.panel_owner and user.id != self.panel_owner[guild_id]:
             if not interaction.response.is_done():
-                await interaction.response.send_message("❌ Solo quien abrió el panel puede usarlo.", ephemeral=True)
+                await interaction.response.send_message(
+                    "❌ Solo quien abrió el panel puede usarlo.",
+                    ephemeral=True
+                )
             else:
-                await interaction.followup.send("❌ Solo quien abrió el panel puede usarlo.", ephemeral=True)
+                await interaction.followup.send(
+                    "❌ Solo quien abrió el panel puede usarlo.",
+                    ephemeral=True
+                )
             return
 
         page = self.user_pages.get(user.id, 1)
-        cfg = self.ensure_guild_config(guild_id)
 
         # ============================
         # CERRAR PANEL
@@ -432,10 +332,8 @@ class AntiSpamCog(commands.Cog):
                 pass
             return
 
-
-
         # ============================
-        # MODALS
+        # MODALES
         # ============================
 
         class SpamModal(discord.ui.Modal):
@@ -545,12 +443,15 @@ class AntiSpamCog(commands.Cog):
             "spam_select_whitelist_users",
             "spam_select_whitelist_roles",
             "spam_select_whitelist_channels",
+            "spam_select_log_channel"
         }
 
         if custom_id in update_only:
+
             if not interaction.response.is_done():
                 await interaction.response.defer()
 
+            # Navegación
             if custom_id == "spam_next_page":
                 page = min(6, page + 1)
                 self.user_pages[user.id] = page
@@ -559,38 +460,38 @@ class AntiSpamCog(commands.Cog):
                 page = max(1, page - 1)
                 self.user_pages[user.id] = page
 
+            # Toggles
             elif custom_id == "spam_toggle_enabled":
                 cfg["enabled"] = not cfg["enabled"]
-                save_antispam(self.config)
 
             elif custom_id == "spam_toggle_progressive":
                 cfg["progressive"] = not cfg["progressive"]
-                save_antispam(self.config)
 
             elif custom_id == "spam_toggle_caps":
                 cfg["caps"]["enabled"] = not cfg["caps"]["enabled"]
-                save_antispam(self.config)
 
             elif custom_id == "spam_toggle_repeat":
                 cfg["repeat"]["enabled"] = not cfg["repeat"]["enabled"]
-                save_antispam(self.config)
 
+            # Selects
             elif custom_id == "spam_select_allowed_roles":
-                cfg["allowed_roles"] = [int(v) for v in interaction.data.get("values", []) if v != "none"]
-                save_antispam(self.config)
+                cfg["allowed_roles"] = [int(v) for v in interaction.data.get("values", [])]
 
             elif custom_id == "spam_select_whitelist_users":
-                cfg["whitelist_users"] = [int(v) for v in interaction.data.get("values", []) if v != "none"]
-                save_antispam(self.config)
+                cfg["whitelist_users"] = [int(v) for v in interaction.data.get("values", [])]
 
             elif custom_id == "spam_select_whitelist_roles":
-                cfg["whitelist_roles"] = [int(v) for v in interaction.data.get("values", []) if v != "none"]
-                save_antispam(self.config)
+                cfg["whitelist_roles"] = [int(v) for v in interaction.data.get("values", [])]
 
             elif custom_id == "spam_select_whitelist_channels":
-                cfg["whitelist_channels"] = [int(v) for v in interaction.data.get("values", []) if v != "none"]
-                save_antispam(self.config)
+                cfg["whitelist_channels"] = [int(v) for v in interaction.data.get("values", [])]
 
+            # NUEVO: canal de logs
+            elif custom_id == "spam_select_log_channel":
+                selected = interaction.data.get("values", [])
+                cfg["log_channel"] = int(selected[0]) if selected else None
+
+            save_antispam(self.config)
             await self.spam_update_panel(interaction, page)
             return
 
@@ -607,9 +508,10 @@ class AntiSpamCog(commands.Cog):
             await interaction.response.send_message("🧪 Test Anti‑Spam activado.", ephemeral=True)
             return
 
+
 # ============================
-# DETECCIÓN DE SPAM
-# ============================
+    # DETECCIÓN DE SPAM
+    # ============================
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -628,7 +530,10 @@ class AntiSpamCog(commands.Cog):
         content = message.content
         now = time.time()
 
-        # Whitelist
+        # ============================
+        # WHITELIST
+        # ============================
+
         if user.id in cfg["whitelist_users"]:
             return
         if any(r.id in cfg["whitelist_roles"] for r in user.roles):
@@ -636,100 +541,158 @@ class AntiSpamCog(commands.Cog):
         if message.channel.id in cfg["whitelist_channels"]:
             return
 
-        # Cooldown
+        # ============================
+        # COOLDOWN
+        # ============================
+
         if user.id in self.cooldowns and now - self.cooldowns[user.id] < cfg["cooldown"]:
             return
         self.cooldowns[user.id] = now
 
-        # Flood tracking
+        # ============================
+        # HISTORIAL DE MENSAJES
+        # ============================
+
         if user.id not in self.user_messages:
             self.user_messages[user.id] = []
 
         self.user_messages[user.id].append((now, content))
 
         interval = cfg["flood"]["interval"]
-        self.user_messages[user.id] = [(t, msg) for t, msg in self.user_messages[user.id] if now - t <= interval]
 
-        # Flood detectado
+        # Limpieza de mensajes viejos
+        self.user_messages[user.id] = [
+            (t, msg) for t, msg in self.user_messages[user.id]
+            if now - t <= interval
+        ]
+
+        # ============================
+        # FLOOD REAL
+        # ============================
+
         if len(self.user_messages[user.id]) >= cfg["flood"]["max_messages"]:
             if user.id not in self.warned or now - self.warned[user.id] > interval:
                 self.warned[user.id] = now
 
                 embed = discord.Embed(
                     title="⚠️ Aviso de flood",
-                    description=f"**{user.mention}, si continúas haciendo spam recibirás `{cfg['action']}`**",
+                    description=f"{user.mention}, estás enviando mensajes demasiado rápido.",
                     color=discord.Color.orange()
                 )
 
-                await message.channel.send(embed=embed)  # YA NO SE BORRA
+                await message.channel.send(embed=embed)
+                await self.send_log(message.guild, embed)
                 return
 
             return await self.apply_action(message, "flood")
 
-        # Repetición
+        # ============================
+        # REPETICIÓN INTELIGENTE
+        # ============================
+
         if cfg["repeat"]["enabled"]:
             msgs = [msg for _, msg in self.user_messages[user.id]]
+
             if len(msgs) >= cfg["repeat"]["max_repeat"]:
                 last_n = msgs[-cfg["repeat"]["max_repeat"]:]
-                if len(set(last_n)) == 1:
+
+                # Normalización
+                normalized = [m.lower().strip() for m in last_n]
+
+                if len(set(normalized)) == 1:
+
                     if user.id not in self.warned or now - self.warned[user.id] > interval:
                         self.warned[user.id] = now
 
                         embed = discord.Embed(
                             title="⚠️ Aviso de repetición",
-                            description=f"**{user.mention}, si continúas repitiendo mensajes recibirás `{cfg['action']}`**",
+                            description=f"{user.mention}, estás repitiendo mensajes.",
                             color=discord.Color.orange()
                         )
 
-                        await message.channel.send(embed=embed)  # YA NO SE BORRA
+                        await message.channel.send(embed=embed)
+                        await self.send_log(message.guild, embed)
                         return
 
-                    return await self.apply_action(message, "repeat")
+                    return await self.apply_action(message, "repetición")
 
-        # Mayúsculas
+        # ============================
+        # MAYÚSCULAS REAL
+        # ============================
+
         if cfg["caps"]["enabled"]:
             letters = [c for c in content if c.isalpha()]
+
             if letters:
                 caps = sum(1 for c in letters if c.isupper())
                 percent = (caps / len(letters)) * 100
+
                 if percent >= cfg["caps"]["max_caps"]:
+
                     if user.id not in self.warned or now - self.warned[user.id] > interval:
                         self.warned[user.id] = now
 
                         embed = discord.Embed(
                             title="⚠️ Aviso de mayúsculas",
-                            description=f"**{user.mention}, si continúas usando mayúsculas recibirás `{cfg['action']}`**",
+                            description=f"{user.mention}, estás usando demasiadas mayúsculas.",
                             color=discord.Color.orange()
                         )
 
-                        await message.channel.send(embed=embed)  # YA NO SE BORRA
+                        await message.channel.send(embed=embed)
+                        await self.send_log(message.guild, embed)
                         return
 
-                    return await self.apply_action(message, "caps")
+                    return await self.apply_action(message, "mayúsculas")
 
-# ============================
-# APLICAR ACCIÓN
-# ============================
+    # ============================
+    # ENVIAR LOGS
+    # ============================
+
+    async def send_log(self, guild: discord.Guild, embed: discord.Embed):
+        guild_id = str(guild.id)
+        cfg = self.config[guild_id]
+
+        log_channel_id = cfg.get("log_channel")
+        if not log_channel_id:
+            return
+
+        channel = guild.get_channel(log_channel_id)
+        if channel:
+            try:
+                await channel.send(embed=embed)
+            except:
+                pass
+
+    # ============================
+    # APLICAR ACCIÓN
+    # ============================
 
     async def apply_action(self, message: discord.Message, reason: str):
-        guild_id = str(message.guild.id)
+        guild = message.guild
+        guild_id = str(guild.id)
         cfg = self.config[guild_id]
         action = cfg["action"]
         user = message.author
 
-        try:
-            await message.delete()
-        except:
-            pass
+        # Embed de acción
+        embed = discord.Embed(
+            title="⛔ Acción aplicada",
+            description=f"**{user.mention} ha recibido `{action}` por spam ({reason}).**",
+            color=discord.Color.red()
+        )
+
+        # Enviar al canal donde ocurrió
+        await message.channel.send(embed=embed)
+
+        # Enviar a logs
+        await self.send_log(guild, embed)
+
+        # ============================
+        # ACCIONES
+        # ============================
 
         # Warn
         if action == "warn":
-            embed = discord.Embed(
-                title="⚠️ Aviso",
-                description=f"**{user.mention}, evita hacer spam ({reason}).**",
-                color=discord.Color.orange()
-            )
-            await message.channel.send(embed=embed)  # YA NO SE BORRA
             return
 
         # Kick
@@ -751,6 +714,7 @@ class AntiSpamCog(commands.Cog):
         # Mute
         if action == "mute":
             duration = cfg["mute_time"]
+
             if cfg["progressive"]:
                 duration = min(duration * 2, 3600)
 
@@ -762,13 +726,6 @@ class AntiSpamCog(commands.Cog):
             except:
                 pass
 
-            embed = discord.Embed(
-                title="⛔ Usuario muteado",
-                description=f"**{user.mention}, has sido muteado por `{duration}` segundos por spam.**",
-                color=discord.Color.red()
-            )
-
-            await message.channel.send(embed=embed)  # YA NO SE BORRA
             return
 
 # ============================
