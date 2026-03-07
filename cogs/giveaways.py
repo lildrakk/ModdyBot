@@ -67,7 +67,7 @@ class JoinButton(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction):
         data = load_giveaways()
 
-        if self.ggiveaway_id not in data:
+        if self.giveaway_id not in data:
             return await interaction.response.send_message("❌ Este giveaway ya no existe.", ephemeral=True)
 
         participantes = data[self.giveaway_id]["participantes"]
@@ -114,7 +114,9 @@ class GiveawayCog(commands.Cog):
         descripcion="Descripción del giveaway",
         tiempo="Duración (ej: 10s, 5m, 2h, 1d)",
         premio="Premio del giveaway",
-        imagen="Imagen adjunta (opcional)"
+        ganadores="Cantidad de ganadores",
+        imagen_url="URL de la imagen (opcional)",
+        imagen_archivo="Adjunta una imagen (opcional)"
     )
     async def gstart(
         self,
@@ -123,7 +125,9 @@ class GiveawayCog(commands.Cog):
         descripcion: str,
         tiempo: str,
         premio: str,
-        imagen: discord.Attachment = None
+        ganadores: int,
+        imagen_url: str = None,
+        imagen_archivo: discord.Attachment = None
     ):
 
         segundos = parse_time(tiempo)
@@ -139,19 +143,30 @@ class GiveawayCog(commands.Cog):
             "canal": interaction.channel.id,
             "premio": premio,
             "fin": fin.timestamp(),
+            "ganadores": ganadores,
             "participantes": [],
-            "mensaje_id": None
+            "mensaje_id": None,
+            "imagen": None
         }
+
+        # Imagen por URL
+        if imagen_url:
+            data[giveaway_id]["imagen"] = imagen_url
+
+        # Imagen adjunta
+        if imagen_archivo:
+            data[giveaway_id]["imagen"] = imagen_archivo.url
+
         save_giveaways(data)
 
         embed = discord.Embed(
             title=titulo,
-            description=f"{descripcion}\n\n**Premio:** {premio}\n**Termina en:** {tiempo}",
+            description=f"{descripcion}\n\n**Premio:** {premio}\n**Ganadores:** {ganadores}\n**Termina en:** {tiempo}",
             color=discord.Color.random()
         )
 
-        if imagen:
-            embed.set_image(url=imagen.url)
+        if data[giveaway_id]["imagen"]:
+            embed.set_image(url=data[giveaway_id]["imagen"])
 
         view = JoinView(giveaway_id)
         msg = await interaction.channel.send(embed=embed, view=view)
@@ -186,10 +201,17 @@ class GiveawayCog(commands.Cog):
                     save_giveaways(data)
                     continue
 
-                ganador_id = random.choice(participantes)
-                ganador = canal.guild.get_member(ganador_id)
+                ganadores = min(info["ganadores"], len(participantes))
+                seleccionados = random.sample(participantes, ganadores)
 
-                await canal.send(f"🎉 **Ganador del giveaway:** {ganador.mention}\n**Premio:** {info['premio']}")
+                texto = "🎉 **Ganadores del giveaway:**\n"
+                for uid in seleccionados:
+                    user = canal.guild.get_member(uid)
+                    texto += f"• {user.mention}\n"
+
+                texto += f"\n**Premio:** {info['premio']}"
+
+                await canal.send(texto)
 
                 del data[g_id]
                 save_giveaways(data)
