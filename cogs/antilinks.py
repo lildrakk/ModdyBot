@@ -26,22 +26,24 @@ def save_antilinks(data):
     with open(ANTILINKS_FILE, "w") as f:
         json.dump(data, f, indent=4)
 
+
 # ============================
 # MODAL PARA AÑADIR DOMINIOS
 # ============================
 
-class AddDomainModal(discord.ui.Modal, title="Añadir dominio permitido"):
-    dominio = discord.ui.TextInput(
-        label="Dominio (ej: youtube.com)",
-        placeholder="sin https:// ni www",
-        required=True,
-        max_length=100
-    )
-
+class AddDomainModal(discord.ui.Modal):
     def __init__(self, cog, guild_id):
-        super().__init__()
+        super().__init__(title="Añadir dominio permitido")
         self.cog = cog
         self.guild_id = guild_id
+
+        self.dominio = discord.ui.TextInput(
+            label="Dominio (ej: youtube.com)",
+            placeholder="sin https:// ni www",
+            required=True,
+            max_length=100
+        )
+        self.add_item(self.dominio)
 
     async def on_submit(self, interaction: discord.Interaction):
         dominio = self.dominio.value.lower().strip()
@@ -56,6 +58,7 @@ class AddDomainModal(discord.ui.Modal, title="Añadir dominio permitido"):
             f"✅ Dominio **{dominio}** añadido a la whitelist.",
             ephemeral=True
         )
+
 
 # ============================
 # COG ANTI-LINKS
@@ -119,7 +122,8 @@ class AntiLinksCog(commands.Cog):
         # Guardar página del usuario
         self.user_pages[interaction.user.id] = 1
 
-        await self.build_panel(interaction, page=1)
+        # Panel inicial (se envía como mensaje nuevo)
+        await self.build_panel(interaction, page=1, initial=True)
 
     # ============================
     # Embeds por página
@@ -278,7 +282,8 @@ class AntiLinksCog(commands.Cog):
             max_values=min(len(options), 25),
             options=options[:25],
             custom_id="select_allowed_servers"
-    )
+            )
+
 
 
 # ============================
@@ -346,7 +351,7 @@ class AntiLinksCog(commands.Cog):
     # PANEL PRINCIPAL
     # ============================
 
-    async def build_panel(self, interaction: discord.Interaction, page: int):
+    async def build_panel(self, interaction: discord.Interaction, page: int, initial=False):
 
         guild = interaction.guild
         guild_id = str(guild.id)
@@ -400,7 +405,19 @@ class AntiLinksCog(commands.Cog):
         for btn in self.nav_buttons(page):
             view.add_item(btn)
 
-        await interaction.response.edit_message(embed=embed, view=view)
+        # ============================
+        # ENVÍO / EDICIÓN DEL PANEL
+        # ============================
+
+        if initial:
+            # Primer mensaje del panel
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        else:
+            # Edición del panel existente
+            if not interaction.response.is_done():
+                await interaction.response.edit_message(embed=embed, view=view)
+            else:
+                await interaction.message.edit(embed=embed, view=view)
 
     # ============================
     # MANEJADOR DE INTERACCIONES
@@ -415,16 +432,28 @@ class AntiLinksCog(commands.Cog):
         custom = interaction.data.get("custom_id", "")
         user_id = interaction.user.id
 
+        # Solo manejar interacciones del panel
+        if custom not in [
+            "next_page", "prev_page", "toggle_enabled", "save_antilinks",
+            "test_antilinks", "select_allowed_roles", "select_whitelist_users",
+            "select_whitelist_roles", "select_whitelist_domains",
+            "select_allowed_servers", "add_domain"
+        ]:
+            return
+
+        guild_id = str(interaction.guild.id)
+        cfg = self.ensure_guild_config(guild_id)
+
         # ============================
         # NAVEGACIÓN
         # ============================
 
         if custom == "next_page":
-            self.user_pages[user_id] += 1
+            self.user_pages[user_id] = min(6, self.user_pages.get(user_id, 1) + 1)
             return await self.build_panel(interaction, self.user_pages[user_id])
 
         if custom == "prev_page":
-            self.user_pages[user_id] -= 1
+            self.user_pages[user_id] = max(1, self.user_pages.get(user_id, 1) - 1)
             return await self.build_panel(interaction, self.user_pages[user_id])
 
         # ============================
@@ -432,16 +461,9 @@ class AntiLinksCog(commands.Cog):
         # ============================
 
         if custom == "toggle_enabled":
-            guild_id = str(interaction.guild.id)
-            cfg = self.ensure_guild_config(guild_id)
-
             cfg["enabled"] = not cfg["enabled"]
             save_antilinks(self.config)
-
-            return await interaction.response.send_message(
-                f"🔧 Anti‑Links ahora está **{'activado' if cfg['enabled'] else 'desactivado'}**.",
-                ephemeral=True
-            )
+            return await self.build_panel(interaction, self.user_pages[user_id])
 
         # ============================
         # GUARDAR CONFIG
@@ -468,45 +490,36 @@ class AntiLinksCog(commands.Cog):
         # SELECTS
         # ============================
 
-        guild_id = str(interaction.guild.id)
-        cfg = self.ensure_guild_config(guild_id)
-
-        # ROLES AUTORIZADOS
         if custom == "select_allowed_roles":
             cfg["allowed_roles"] = [int(v) for v in interaction.data["values"]]
             save_antilinks(self.config)
-            return await interaction.response.send_message("✔ Roles autorizados actualizados.", ephemeral=True)
+            return await self.build_panel(interaction, self.user_pages[user_id])
 
-        # WHITELIST USUARIOS
         if custom == "select_whitelist_users":
             cfg["whitelist_users"] = [int(v) for v in interaction.data["values"]]
             save_antilinks(self.config)
-            return await interaction.response.send_message("✔ Whitelist de usuarios actualizada.", ephemeral=True)
+            return await self.build_panel(interaction, self.user_pages[user_id])
 
-        # WHITELIST ROLES
         if custom == "select_whitelist_roles":
             cfg["whitelist_roles"] = [int(v) for v in interaction.data["values"]]
             save_antilinks(self.config)
-            return await interaction.response.send_message("✔ Whitelist de roles actualizada.", ephemeral=True)
+            return await self.build_panel(interaction, self.user_pages[user_id])
 
-        # WHITELIST DOMINIOS
         if custom == "select_whitelist_domains":
             cfg["whitelist_domains"] = interaction.data["values"]
             save_antilinks(self.config)
-            return await interaction.response.send_message("✔ Whitelist de dominios actualizada.", ephemeral=True)
+            return await self.build_panel(interaction, self.user_pages[user_id])
 
-        # SERVIDORES ALIADOS
         if custom == "select_allowed_servers":
             cfg["allowed_servers"] = interaction.data["values"]
             save_antilinks(self.config)
-            return await interaction.response.send_message("✔ Servidores aliados actualizados.", ephemeral=True)
+            return await self.build_panel(interaction, self.user_pages[user_id])
 
         # ============================
         # ➕ AÑADIR DOMINIO
         # ============================
 
         if custom == "add_domain":
-            guild_id = str(interaction.guild.id)
             return await interaction.response.send_modal(AddDomainModal(self, guild_id))
 
     # ============================
@@ -597,6 +610,7 @@ class AntiLinksCog(commands.Cog):
             f"{message.author.mention} 🚫 No puedes enviar enlaces en este servidor.",
             delete_after=5
         )
+
 
 # ============================
 # SETUP FINAL DEL COG
