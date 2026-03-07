@@ -35,7 +35,6 @@ class WelcomeChannelCog(commands.Cog):
         self.bot = bot
         self.welcome_config = load_welcome()
 
-
     # ============================
     # COMANDO /setwelcome
     # ============================
@@ -47,14 +46,16 @@ class WelcomeChannelCog(commands.Cog):
     @app_commands.describe(
         canal="Canal donde se enviará la bienvenida",
         mensaje="Mensaje de bienvenida (usa {user} y {server})",
-        imagen="URL de la imagen de bienvenida (opcional si adjuntas una imagen)"
+        imagen_url="URL de la imagen de bienvenida",
+        imagen_archivo="Adjunta una imagen de bienvenida"
     )
     async def setwelcome(
         self,
         interaction: discord.Interaction,
         canal: discord.TextChannel = None,
         mensaje: str = None,
-        imagen: str = None
+        imagen_url: str = None,
+        imagen_archivo: discord.Attachment = None
     ):
 
         if not interaction.user.guild_permissions.manage_guild:
@@ -80,13 +81,12 @@ class WelcomeChannelCog(commands.Cog):
             self.welcome_config[guild_id]["welcome_message"] = mensaje
 
         # Imagen por URL
-        if imagen:
-            self.welcome_config[guild_id]["welcome_image"] = imagen
+        if imagen_url:
+            self.welcome_config[guild_id]["welcome_image"] = imagen_url
 
-        # Imagen adjunta desde Discord
-        if interaction.attachments:
-            archivo = interaction.attachments[0]
-            self.welcome_config[guild_id]["welcome_image"] = archivo.url
+        # Imagen adjunta
+        if imagen_archivo:
+            self.welcome_config[guild_id]["welcome_image"] = imagen_archivo.url
 
         save_welcome(self.welcome_config)
 
@@ -95,7 +95,6 @@ class WelcomeChannelCog(commands.Cog):
             ephemeral=True
         )
 
-
     # ============================
     # EVENTO: on_member_join
     # ============================
@@ -103,7 +102,7 @@ class WelcomeChannelCog(commands.Cog):
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
 
-        # Recargar JSON SIEMPRE para evitar que se pierda al reiniciar
+        # Recargar JSON SIEMPRE
         self.welcome_config = load_welcome()
 
         guild_id = str(member.guild.id)
@@ -121,7 +120,6 @@ class WelcomeChannelCog(commands.Cog):
         if not canal:
             return
 
-        # Mensaje de bienvenida (TEXTO NORMAL, NO EMBED)
         mensaje = config.get(
             "welcome_message",
             "🎉 Bienvenido {user} a **{server}**!"
@@ -130,16 +128,14 @@ class WelcomeChannelCog(commands.Cog):
         mensaje = mensaje.replace("{user}", member.mention)
         mensaje = mensaje.replace("{server}", member.guild.name)
 
-        # Imagen (URL o adjunta)
         imagen = config.get("welcome_image")
 
         try:
             if imagen:
                 await canal.send(mensaje)
-                await canal.send(imagen)  # Imagen grande abajo
+                await canal.send(imagen)
             else:
                 await canal.send(mensaje)
-
         except:
             pass
 
