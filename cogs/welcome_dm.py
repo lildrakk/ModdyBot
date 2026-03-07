@@ -8,6 +8,10 @@ import os
 DM_FILE = "dm.json"
 
 
+# ============================
+# JSON LOADER
+# ============================
+
 def load_dm():
     if not os.path.exists(DM_FILE):
         data = {"servers": {}}
@@ -27,10 +31,15 @@ def save_dm(data):
         json.dump(data, f, indent=4)
 
 
+# ============================
+# COG DE BIENVENIDA POR DM
+# ============================
+
 class WelcomeDMCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.dm_config = load_dm()
+        self.dm_config = load_dm()  # Carga inicial
+
 
     # ============================
     # /dmwelcome
@@ -55,6 +64,9 @@ class WelcomeDMCog(commands.Cog):
                 ephemeral=True
             )
 
+        # Recargar JSON SIEMPRE
+        self.dm_config = load_dm()
+
         guild_id = str(interaction.guild.id)
 
         if guild_id not in self.dm_config["servers"]:
@@ -68,9 +80,11 @@ class WelcomeDMCog(commands.Cog):
             ephemeral=True
         )
 
+
     # ============================
     # /dmprueba
     # ============================
+
     @app_commands.command(
         name="dmprueba",
         description="Prueba el mensaje de bienvenida por DM."
@@ -79,10 +93,6 @@ class WelcomeDMCog(commands.Cog):
 
         guild = interaction.guild
         user = interaction.user
-
-        # ============================
-        # TEXTO DEL EMBED CON ENLACES MARCADOS
-        # ============================
 
         descripcion = (
             f"👋 **Hola {user.name}**, bienvenido a **{guild.name}**.\n\n"
@@ -104,12 +114,8 @@ class WelcomeDMCog(commands.Cog):
         if guild.icon:
             embed.set_thumbnail(url=guild.icon.url)
 
-        # ============================
-        # ENVIAR DM
-        # ============================
-
         try:
-            await user.send(embed=embed)  # SOLO EL EMBED
+            await user.send(embed=embed)
             await interaction.response.send_message(
                 "📨 Te envié el mensaje de bienvenida por DM.",
                 ephemeral=True
@@ -119,14 +125,17 @@ class WelcomeDMCog(commands.Cog):
                 "❌ No pude enviarte el DM. Puede que tengas los mensajes privados desactivados.",
                 ephemeral=True
             )
-    
-    
+
+
     # ============================
     # Evento real: on_member_join
     # ============================
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
+
+        # Recargar JSON SIEMPRE
+        self.dm_config = load_dm()
 
         guild_id = str(member.guild.id)
 
@@ -144,9 +153,9 @@ class WelcomeDMCog(commands.Cog):
             "Gracias por unirte a un servidor que utiliza nuestro sistema de seguridad.\n"
             "Disfruta tu estancia y recuerda seguir las normas del servidor.📋\n\n"
             "**📌 Servidor de soporte**\n"
-            "https://discord.gg/u8W4jv7NXx\n\n"
+            "[Entrar aquí](https://discord.gg/u8W4jv7NXx)\n\n"
             "🤖 **Invita a ModdyBot**\n"
-            "https://discord.com/oauth2/authorize?client_id=1450924184606740642&permissions=8&integration_type=0&scope=bot\n\n"
+            "[Invitar aquí](https://discord.com/oauth2/authorize?client_id=1450924184606740642&permissions=8&integration_type=0&scope=bot)\n\n"
             "✨ ¡Nos alegra tenerte aquí!"
         )
 
@@ -159,7 +168,7 @@ class WelcomeDMCog(commands.Cog):
             embed.set_thumbnail(url=member.guild.icon.url)
 
         try:
-            await member.send(embed=embed)  # SOLO EL EMBED
+            await member.send(embed=embed)
         except:
             pass
 
