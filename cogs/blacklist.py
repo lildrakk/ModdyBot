@@ -53,7 +53,7 @@ class GlobalAddModal(discord.ui.Modal, title="➕ Añadir a Blacklist Global"):
     )
 
     async def on_submit(self, interaction: discord.Interaction):
-        if interaction.user.id != GLOBAL_OWNER_ID:
+        if interaction.user.id not in [GLOBAL_OWNER_ID, interaction.client.user.id]:
             return await interaction.response.send_message(
                 "❌ No puedes usar este modal.",
                 ephemeral=True
@@ -105,7 +105,7 @@ class Blacklist(commands.Cog):
         description="Añade un usuario a la blacklist GLOBAL (modal + pruebas opcionales)"
     )
     async def global_blacklist_cmd(self, interaction: discord.Interaction):
-        if interaction.user.id != GLOBAL_OWNER_ID:
+        if interaction.user.id not in [GLOBAL_OWNER_ID, interaction.client.user.id]:
             return await interaction.response.send_message(
                 "❌ Solo el dueño del bot puede usar este comando.",
                 ephemeral=True
@@ -144,7 +144,7 @@ class Blacklist(commands.Cog):
 
         del pending_proofs[staff_id]
 
-        # DM estilo XN Protect
+        # DM 
         try:
             user_obj = await self.bot.fetch_user(int(target_id))
             embed = discord.Embed(
@@ -197,7 +197,7 @@ class Blacklist(commands.Cog):
         pruebas = data.get("pruebas", [])
         fecha_ban = data.get("fecha_ban", "Desconocida")
 
-        # DM estilo XN Protect
+        # DM
         try:
             embed = discord.Embed(
                 title="🚫 Acceso denegado (ModdyBot)",
@@ -234,7 +234,7 @@ class Blacklist(commands.Cog):
         description="Quita un usuario de la blacklist GLOBAL"
     )
     async def global_unblacklist_cmd(self, interaction: discord.Interaction, usuario: str):
-        if interaction.user.id != GLOBAL_OWNER_ID:
+        if interaction.user.id not in [GLOBAL_OWNER_ID, interaction.client.user.id]:
             return await interaction.response.send_message(
                 "❌ Solo el dueño del bot puede usar este comando.",
                 ephemeral=True
@@ -320,7 +320,7 @@ class Blacklist(commands.Cog):
         description="Simula un ban global SIN banear a nadie (solo para el dueño)"
     )
     async def global_blacklist_prueba(self, interaction: discord.Interaction):
-        if interaction.user.id != GLOBAL_OWNER_ID:
+        if interaction.user.id not in [GLOBAL_OWNER_ID, interaction.client.user.id]:
             return await interaction.response.send_message(
                 "❌ Solo el dueño del bot puede usar este comando.",
                 ephemeral=True
@@ -374,7 +374,7 @@ class Blacklist(commands.Cog):
         description="Simula un unban global SIN modificar nada (solo para el dueño)"
     )
     async def global_unblacklist_prueba(self, interaction: discord.Interaction):
-        if interaction.user.id != GLOBAL_OWNER_ID:
+        if interaction.user.id not in [GLOBAL_OWNER_ID, interaction.client.user.id]:
             return await interaction.response.send_message(
                 "❌ Solo el dueño del bot puede usar este comando.",
                 ephemeral=True
@@ -419,7 +419,7 @@ class Blacklist(commands.Cog):
         description="Muestra la lista completa de usuarios en la blacklist global"
     )
     async def global_blacklistlist_cmd(self, interaction: discord.Interaction):
-        if interaction.user.id != GLOBAL_OWNER_ID:
+        if interaction.user.id not in [GLOBAL_OWNER_ID, interaction.client.user.id]:
             return await interaction.response.send_message(
                 "❌ Solo el dueño del bot puede usar este comando.",
                 ephemeral=True
@@ -473,7 +473,7 @@ class Blacklist(commands.Cog):
         description="Inspecciona un usuario de la blacklist global"
     )
     async def global_inspect_cmd(self, interaction: discord.Interaction, usuario: str):
-        if interaction.user.id != GLOBAL_OWNER_ID:
+        if interaction.user.id not in [GLOBAL_OWNER_ID, interaction.client.user.id]:
             return await interaction.response.send_message(
                 "❌ Solo el dueño del bot puede usar este comando.",
                 ephemeral=True
@@ -683,7 +683,7 @@ class GlobalRemoveModal(discord.ui.Modal, title="➖ Eliminar de Blacklist Globa
     user_id = discord.ui.TextInput(label="ID de usuario", placeholder="123456789012345678")
 
     async def on_submit(self, interaction: discord.Interaction):
-        if interaction.user.id != GLOBAL_OWNER_ID:
+        if interaction.user.id not in [GLOBAL_OWNER_ID, interaction.client.user.id]:
             return await interaction.response.send_message("❌ No puedes usar este modal.", ephemeral=True)
 
         uid = str(self.user_id.value).strip()
@@ -709,26 +709,26 @@ class GlobalBlacklistView(discord.ui.View):
 
     @discord.ui.button(label="➕ Añadir", style=discord.ButtonStyle.success)
     async def add_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id != GLOBAL_OWNER_ID:
+        if interaction.user.id not in [GLOBAL_OWNER_ID, interaction.client.user.id]:
             return await interaction.response.send_message("❌ No puedes usar este panel.", ephemeral=True)
         await interaction.response.send_modal(GlobalAddModal())
 
     @discord.ui.button(label="➖ Eliminar", style=discord.ButtonStyle.danger)
     async def remove_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id != GLOBAL_OWNER_ID:
+        if interaction.user.id not in [GLOBAL_OWNER_ID, interaction.client.user.id]:
             return await interaction.response.send_message("❌ No puedes usar este panel.", ephemeral=True)
         await interaction.response.send_modal(GlobalRemoveModal())
 
     @discord.ui.button(label="🔄 Actualizar", style=discord.ButtonStyle.primary)
     async def refresh_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id != GLOBAL_OWNER_ID:
+        if interaction.user.id not in [GLOBAL_OWNER_ID, interaction.client.user.id]:
             return await interaction.response.send_message("❌ No puedes usar este panel.", ephemeral=True)
         embed = build_global_embed()
         await interaction.response.edit_message(embed=embed, view=self)
 
     @discord.ui.button(label="❌ Cerrar", style=discord.ButtonStyle.secondary)
     async def close_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id != GLOBAL_OWNER_ID:
+        if interaction.user.id not in [GLOBAL_OWNER_ID, interaction.client.user.id]:
             return await interaction.response.send_message("❌ No puedes usar este panel.", ephemeral=True)
         await interaction.response.edit_message(content="Panel cerrado.", embed=None, view=None)
 
