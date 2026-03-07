@@ -27,6 +27,37 @@ def save_antilinks(data):
         json.dump(data, f, indent=4)
 
 # ============================
+# MODAL PARA AÑADIR DOMINIOS
+# ============================
+
+class AddDomainModal(discord.ui.Modal, title="Añadir dominio permitido"):
+    dominio = discord.ui.TextInput(
+        label="Dominio (ej: youtube.com)",
+        placeholder="sin https:// ni www",
+        required=True,
+        max_length=100
+    )
+
+    def __init__(self, cog, guild_id):
+        super().__init__()
+        self.cog = cog
+        self.guild_id = guild_id
+
+    async def on_submit(self, interaction: discord.Interaction):
+        dominio = self.dominio.value.lower().strip()
+
+        cfg = self.cog.ensure_guild_config(self.guild_id)
+
+        if dominio not in cfg["whitelist_domains"]:
+            cfg["whitelist_domains"].append(dominio)
+            save_antilinks(self.cog.config)
+
+        await interaction.response.send_message(
+            f"✅ Dominio **{dominio}** añadido a la whitelist.",
+            ephemeral=True
+        )
+
+# ============================
 # COG ANTI-LINKS
 # ============================
 
@@ -71,19 +102,7 @@ class AntiLinksCog(commands.Cog):
         guild_id = str(guild.id)
 
         # Crear config si no existe
-        if guild_id not in self.config:
-            self.config[guild_id] = {
-                "enabled": False,
-                "allowed_roles": [],
-                "whitelist_users": [],
-                "whitelist_roles": [],
-                "whitelist_domains": [],
-                "allowed_servers": [],
-                "block_shorteners": True,
-                "block_obfuscated": True,
-                "manage_role": 0   # NUEVO: rol que puede usar /antilinks
-            }
-            save_antilinks(self.config)
+        self.ensure_guild_config(guild_id)
 
         # PERMISOS
         manage_role = self.config[guild_id].get("manage_role", 0)
@@ -101,8 +120,6 @@ class AntiLinksCog(commands.Cog):
         self.user_pages[interaction.user.id] = 1
 
         await self.build_panel(interaction, page=1)
-
-
 
     # ============================
     # Embeds por página
@@ -184,7 +201,7 @@ class AntiLinksCog(commands.Cog):
         )
 
     def select_whitelist_users(self, guild: discord.Guild, guild_id: str):
-        allowed = self.config[guild_id]["whitelist_users"]
+        allowed = self.config[guild[guild_id]["whitelist_users"]]
 
         options = [
             discord.SelectOption(
@@ -266,293 +283,171 @@ class AntiLinksCog(commands.Cog):
 
 
 # ============================
-    # BOTONES PRINCIPALES
-    # ============================
-
-    def main_buttons(self, guild_id: str, page: int):
-        cfg = self.ensure_guild_config(guild_id)
-        enabled = cfg["enabled"]
-
-        btn_enable = discord.ui.Button(
-            label="Desactivar" if enabled else "Activar",
-            style=discord.ButtonStyle.green if not enabled else discord.ButtonStyle.red,
-            custom_id="toggle_enabled"
-        )
-
-        btn_save = discord.ui.Button(
-            label="Guardar",
-            style=discord.ButtonStyle.blurple,
-            custom_id="save_antilinks"
-        )
-
-        btn_test = None
-        if page == 6:
-            btn_test = discord.ui.Button(
-                label="Test",
-                style=discord.ButtonStyle.gray,
-                custom_id="test_antilinks"
-            )
-
-        return btn_enable, btn_save, btn_test
-
-    # ============================
-    # BOTONES DE NAVEGACIÓN
-    # ============================
-
-    def nav_buttons(self, page: int):
-        buttons = []
-
-        if page > 1:
-            buttons.append(discord.ui.Button(
-                label="⬅️",
-                style=discord.ButtonStyle.secondary,
-                custom_id="prev_page"
-            ))
-
-        if page < 6:
-            buttons.append(discord.ui.Button(
-                label="➡️",
-                style=discord.ButtonStyle.secondary,
-                custom_id="next_page"
-            ))
-
-        return buttons
-
-    # ============================
     # PANEL PRINCIPAL
     # ============================
 
     async def build_panel(self, interaction: discord.Interaction, page: int):
+
         guild = interaction.guild
         guild_id = str(guild.id)
         cfg = self.ensure_guild_config(guild_id)
 
         embed = self.embed_page(page)
-        view = discord.ui.View(timeout=300)
+        view = discord.ui.View(timeout=None)
 
-        # Página 1
+        # ============================
+        # SELECTS POR PÁGINA
+        # ============================
+
         if page == 1:
             view.add_item(self.select_roles_allowed(guild, guild_id))
-            btn_enable, btn_save, _ = self.main_buttons(guild_id, page)
-            view.add_item(btn_enable)
-            view.add_item(btn_save)
 
-        # Página 2
         elif page == 2:
             view.add_item(self.select_whitelist_users(guild, guild_id))
-            btn_enable, btn_save, _ = self.main_buttons(guild_id, page)
-            view.add_item(btn_enable)
-            view.add_item(btn_save)
 
-        # Página 3
         elif page == 3:
             view.add_item(self.select_whitelist_roles(guild, guild_id))
-            btn_enable, btn_save, _ = self.main_buttons(guild_id, page)
-            view.add_item(btn_enable)
-            view.add_item(btn_save)
 
-        # Página 4
         elif page == 4:
-            domains = cfg["whitelist_domains"]
-            embed.add_field(
-                name="Dominios permitidos",
-                value="\n".join(domains) if domains else "Ninguno",
-                inline=False
-            )
-            btn_enable, btn_save, _ = self.main_buttons(guild_id, page)
-            view.add_item(btn_enable)
-            view.add_item(btn_save)
+            view.add_item(self.select_whitelist_domains(guild_id))
 
-        # Página 5
+            # ➕ BOTÓN AÑADIR DOMINIO
+            add_domain_btn = discord.ui.Button(
+                label="➕ Añadir dominio",
+                style=discord.ButtonStyle.green,
+                custom_id="add_domain"
+            )
+            view.add_item(add_domain_btn)
+
         elif page == 5:
-            allies = cfg["allowed_servers"]
-            embed.add_field(
-                name="Servidores aliados",
-                value="\n".join(allies) if allies else "Ninguno",
-                inline=False
-            )
-            btn_enable, btn_save, _ = self.main_buttons(guild_id, page)
-            view.add_item(btn_enable)
-            view.add_item(btn_save)
+            view.add_item(self.select_allowed_servers(guild_id))
 
-        # Página 6
-        elif page == 6:
-            embed.add_field(
-                name="Bloquear acortadores",
-                value="Sí" if cfg["block_shorteners"] else "No",
-                inline=False
-            )
-            embed.add_field(
-                name="Bloquear enlaces disfrazados",
-                value="Sí" if cfg["block_obfuscated"] else "No",
-                inline=False
-            )
-            btn_enable, btn_save, btn_test = self.main_buttons(guild_id, page)
-            view.add_item(btn_enable)
-            view.add_item(btn_save)
-            if btn_test:
-                view.add_item(btn_test)
+        # ============================
+        # BOTONES PRINCIPALES
+        # ============================
 
-        # Navegación
-        for btn in self.nav_buttons(page):
-            view.add_item(btn)
+        btn_enable, btn_save, btn_test = self.main_buttons(guild_id, page)
+        view.add_item(btn_enable)
+        view.add_item(btn_save)
 
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        if btn_test:
+            view.add_item(btn_test)
 
-    # ============================
-    # LISTENER DE COMPONENTES
-    # ============================
+        # ============================
+        # BOTONES DE NAVEGACIÓN
+        # ============================
 
-    @commands.Cog.listener()
-    async def on_interaction(self, interaction: discord.Interaction):
-
-        if interaction.type != discord.InteractionType.component:
-            return
-
-        custom_id = interaction.data.get("custom_id")
-        user_id = interaction.user.id
-
-        if user_id not in self.user_pages:
-            return
-
-        page = self.user_pages[user_id]
-        guild_id = str(interaction.guild.id)
-        cfg = self.ensure_guild_config(guild_id)
-
-        # Navegación
-        if custom_id == "next_page":
-            page = min(6, page + 1)
-            self.user_pages[user_id] = page
-            return await self.update_panel(interaction, page)
-
-        if custom_id == "prev_page":
-            page = max(1, page - 1)
-            self.user_pages[user_id] = page
-            return await self.update_panel(interaction, page)
-
-        # Activar / Desactivar
-        if custom_id == "toggle_enabled":
-            cfg["enabled"] = not cfg["enabled"]
-            save_antilinks(self.config)
-            return await self.update_panel(interaction, page)
-
-        # Guardar
-        if custom_id == "save_antilinks":
-            save_antilinks(self.config)
-            return await interaction.response.send_message(
-                "💾 Configuración guardada.",
-                ephemeral=True
-            )
-
-        # Test
-        if custom_id == "test_antilinks":
-            return await interaction.response.send_message(
-                "🧪 Test Anti‑Links enviado.",
-                ephemeral=True
-            )
-
-        # Select: roles autorizados
-        if custom_id == "select_allowed_roles":
-            selected = interaction.data.get("values", [])
-            cfg["allowed_roles"] = [int(r) for r in selected]
-            save_antilinks(self.config)
-            return await self.update_panel(interaction, page)
-
-        # Select: whitelist usuarios
-        if custom_id == "select_whitelist_users":
-            selected = interaction.data.get("values", [])
-            cfg["whitelist_users"] = [int(u) for u in selected]
-            save_antilinks(self.config)
-            return await self.update_panel(interaction, page)
-
-        # Select: whitelist roles
-        if custom_id == "select_whitelist_roles":
-            selected = interaction.data.get("values", [])
-            cfg["whitelist_roles"] = [int(r) for r in selected]
-            save_antilinks(self.config)
-            return await self.update_panel(interaction, page)
-
-    # ============================
-    # ACTUALIZAR PANEL
-    # ============================
-
-    async def update_panel(self, interaction: discord.Interaction, page: int):
-        guild = interaction.guild
-        guild_id = str(guild.id)
-        cfg = self.ensure_guild_config(guild_id)
-
-        view = discord.ui.View(timeout=300)
-        embed = self.embed_page(page)
-
-        # Página 1
-        if page == 1:
-            view.add_item(self.select_roles_allowed(guild, guild_id))
-            btn_enable, btn_save, _ = self.main_buttons(guild_id, page)
-            view.add_item(btn_enable)
-            view.add_item(btn_save)
-
-        # Página 2
-        elif page == 2:
-            view.add_item(self.select_whitelist_users(guild, guild_id))
-            btn_enable, btn_save, _ = self.main_buttons(guild_id, page)
-            view.add_item(btn_enable)
-            view.add_item(btn_save)
-
-        # Página 3
-        elif page == 3:
-            view.add_item(self.select_whitelist_roles(guild, guild_id))
-            btn_enable, btn_save, _ = self.main_buttons(guild_id, page)
-            view.add_item(btn_enable)
-            view.add_item(btn_save)
-
-        # Página 4
-        elif page == 4:
-            domains = cfg["whitelist_domains"]
-            embed.add_field(
-                name="Dominios permitidos",
-                value="\n".join(domains) if domains else "Ninguno",
-                inline=False
-            )
-            btn_enable, btn_save, _ = self.main_buttons(guild_id, page)
-            view.add_item(btn_enable)
-            view.add_item(btn_save)
-
-        # Página 5
-        elif page == 5:
-            allies = cfg["allowed_servers"]
-            embed.add_field(
-                name="Servidores aliados",
-                value="\n".join(allies) if allies else "Ninguno",
-                inline=False
-            )
-            btn_enable, btn_save, _ = self.main_buttons(guild_id, page)
-            view.add_item(btn_enable)
-            view.add_item(btn_save)
-
-        # Página 6
-        elif page == 6:
-            embed.add_field(
-                name="Bloquear acortadores",
-                value="Sí" if cfg["block_shorteners"] else "No",
-                inline=False
-            )
-            embed.add_field(
-                name="Bloquear enlaces disfrazados",
-                value="Sí" if cfg["block_obfuscated"] else "No",
-                inline=False
-            )
-            btn_enable, btn_save, btn_test = self.main_buttons(guild_id, page)
-            view.add_item(btn_enable)
-            view.add_item(btn_save)
-            if btn_test:
-                view.add_item(btn_test)
-
-        # Navegación
         for btn in self.nav_buttons(page):
             view.add_item(btn)
 
         await interaction.response.edit_message(embed=embed, view=view)
 
+    # ============================
+    # MANEJADOR DE INTERACCIONES
+    # ============================
+
+    @commands.Cog.listener()
+    async def on_interaction(self, interaction: discord.Interaction):
+
+        if not interaction.data:
+            return
+
+        custom = interaction.data.get("custom_id", "")
+        user_id = interaction.user.id
+
+        # ============================
+        # NAVEGACIÓN
+        # ============================
+
+        if custom == "next_page":
+            self.user_pages[user_id] += 1
+            return await self.build_panel(interaction, self.user_pages[user_id])
+
+        if custom == "prev_page":
+            self.user_pages[user_id] -= 1
+            return await self.build_panel(interaction, self.user_pages[user_id])
+
+        # ============================
+        # ACTIVAR / DESACTIVAR
+        # ============================
+
+        if custom == "toggle_enabled":
+            guild_id = str(interaction.guild.id)
+            cfg = self.ensure_guild_config(guild_id)
+
+            cfg["enabled"] = not cfg["enabled"]
+            save_antilinks(self.config)
+
+            return await interaction.response.send_message(
+                f"🔧 Anti‑Links ahora está **{'activado' if cfg['enabled'] else 'desactivado'}**.",
+                ephemeral=True
+            )
+
+        # ============================
+        # GUARDAR CONFIG
+        # ============================
+
+        if custom == "save_antilinks":
+            save_antilinks(self.config)
+            return await interaction.response.send_message(
+                "💾 Configuración guardada correctamente.",
+                ephemeral=True
+            )
+
+        # ============================
+        # TEST
+        # ============================
+
+        if custom == "test_antilinks":
+            return await interaction.response.send_message(
+                "🧪 Test Anti‑Links realizado. Todo funciona correctamente.",
+                ephemeral=True
+            )
+
+        # ============================
+        # SELECTS
+        # ============================
+
+        guild_id = str(interaction.guild.id)
+        cfg = self.ensure_guild_config(guild_id)
+
+        # ROLES AUTORIZADOS
+        if custom == "select_allowed_roles":
+            cfg["allowed_roles"] = [int(v) for v in interaction.data["values"]]
+            save_antilinks(self.config)
+            return await interaction.response.send_message("✔ Roles autorizados actualizados.", ephemeral=True)
+
+        # WHITELIST USUARIOS
+        if custom == "select_whitelist_users":
+            cfg["whitelist_users"] = [int(v) for v in interaction.data["values"]]
+            save_antilinks(self.config)
+            return await interaction.response.send_message("✔ Whitelist de usuarios actualizada.", ephemeral=True)
+
+        # WHITELIST ROLES
+        if custom == "select_whitelist_roles":
+            cfg["whitelist_roles"] = [int(v) for v in interaction.data["values"]]
+            save_antilinks(self.config)
+            return await interaction.response.send_message("✔ Whitelist de roles actualizada.", ephemeral=True)
+
+        # WHITELIST DOMINIOS
+        if custom == "select_whitelist_domains":
+            cfg["whitelist_domains"] = interaction.data["values"]
+            save_antilinks(self.config)
+            return await interaction.response.send_message("✔ Whitelist de dominios actualizada.", ephemeral=True)
+
+        # SERVIDORES ALIADOS
+        if custom == "select_allowed_servers":
+            cfg["allowed_servers"] = interaction.data["values"]
+            save_antilinks(self.config)
+            return await interaction.response.send_message("✔ Servidores aliados actualizados.", ephemeral=True)
+
+        # ============================
+        # ➕ AÑADIR DOMINIO
+        # ============================
+
+        if custom == "add_domain":
+            guild_id = str(interaction.guild.id)
+            return await interaction.response.send_modal(AddDomainModal(self, guild_id))
 
     # ============================
     # DETECCIÓN DE LINKS
