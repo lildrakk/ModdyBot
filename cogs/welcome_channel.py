@@ -8,6 +8,10 @@ import aiohttp
 
 WELCOME_FILE = "welcome.json"
 
+# ============================
+# FUNCIONES DE GUARDADO
+# ============================
+
 def load_welcome():
     if not os.path.exists(WELCOME_FILE):
         with open(WELCOME_FILE, "w") as f:
@@ -21,13 +25,20 @@ def save_welcome(data):
         json.dump(data, f, indent=4)
 
 
+# ============================
+# CONTROL DE PANEL
+# ============================
+
+active_panels = {}  # {interaction_id: user_id}
+
+
+# ============================
+# COG PRINCIPAL
+# ============================
+
 class WelcomeCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-
-    # ============================
-    # PANEL — PÁGINA 1
-    # ============================
 
     @app_commands.command(name="welcome", description="Abrir panel de bienvenida")
     async def welcome(self, interaction: discord.Interaction):
@@ -61,21 +72,26 @@ class WelcomeCog(commands.Cog):
         embed.add_field(name="Canal", value=canal, inline=False)
         embed.add_field(name="Logs", value=logs, inline=False)
 
-        view = WelcomePage1(self.bot, interaction.user.id)
+        active_panels[interaction.id] = interaction.user.id
+
+        view = WelcomePage1()
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
 
+# ============================
+# PÁGINA 1 — VIEW PERSISTENTE
+# ============================
+
 class WelcomePage1(discord.ui.View):
-    def __init__(self, bot, user_id):
-        super().__init__(timeout=120)
-        self.bot = bot
-        self.user_id = user_id
+    def __init__(self):
+        super().__init__(timeout=None)
 
-    async def interaction_check(self, interaction):
-        return interaction.user.id == self.user_id
-
-    @discord.ui.button(label="Activar/Desactivar", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="Activar/Desactivar", style=discord.ButtonStyle.primary, custom_id="welcome_toggle")
     async def toggle(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        if active_panels.get(interaction.message.interaction.id) != interaction.user.id:
+            return await interaction.response.send_message("❌ No puedes usar este panel.", ephemeral=True)
+
         guild_id = str(interaction.guild.id)
         data = load_welcome()
 
@@ -83,10 +99,14 @@ class WelcomePage1(discord.ui.View):
         save_welcome(data)
 
         estado = "🟢 Activado" if data[guild_id]["enabled"] else "🔴 Desactivado"
-        await interaction.response.send_message(f"Estado cambiado a: **{estado}**", ephemeral=True)
 
-    @discord.ui.button(label="Cambiar canal", style=discord.ButtonStyle.secondary)
+        await update_page1(interaction, estado)
+
+    @discord.ui.button(label="Cambiar canal", style=discord.ButtonStyle.secondary, custom_id="welcome_set_channel")
     async def cambiar_canal(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        if active_panels.get(interaction.message.interaction.id) != interaction.user.id:
+            return await interaction.response.send_message("❌ No puedes usar este panel.", ephemeral=True)
 
         class CanalModal(discord.ui.Modal, title="Cambiar canal de bienvenida"):
             canal = discord.ui.TextInput(label="ID del canal")
@@ -113,8 +133,11 @@ class WelcomePage1(discord.ui.View):
 
         await interaction.response.send_modal(CanalModal())
 
-    @discord.ui.button(label="Cambiar logs", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="Cambiar logs", style=discord.ButtonStyle.secondary, custom_id="welcome_set_logs")
     async def cambiar_logs(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        if active_panels.get(interaction.message.interaction.id) != interaction.user.id:
+            return await interaction.response.send_message("❌ No puedes usar este panel.", ephemeral=True)
 
         class LogsModal(discord.ui.Modal, title="Cambiar canal de logs"):
             canal = discord.ui.TextInput(label="ID del canal")
@@ -141,9 +164,13 @@ class WelcomePage1(discord.ui.View):
 
         await interaction.response.send_modal(LogsModal())
 
-    @discord.ui.button(label="Página 2 → Mensaje", style=discord.ButtonStyle.success)
+    @discord.ui.button(label="Página 2 → Mensaje", style=discord.ButtonStyle.success, custom_id="welcome_page2")
     async def pagina2(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("Cargando página 2...", ephemeral=True)
+
+        if active_panels.get(interaction.message.interaction.id) != interaction.user.id:
+            return await interaction.response.send_message("❌ No puedes usar este panel.", ephemeral=True)
+
+        await load_page2(interaction)
 
 
 # ============================
@@ -151,16 +178,14 @@ class WelcomePage1(discord.ui.View):
 # ============================
 
 class WelcomePage2(discord.ui.View):
-    def __init__(self, bot, user_id):
-        super().__init__(timeout=120)
-        self.bot = bot
-        self.user_id = user_id
+    def __init__(self):
+        super().__init__(timeout=None)
 
-    async def interaction_check(self, interaction):
-        return interaction.user.id == self.user_id
-
-    @discord.ui.button(label="Cambiar mensaje", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="Cambiar mensaje", style=discord.ButtonStyle.primary, custom_id="welcome_set_message")
     async def cambiar_mensaje(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        if active_panels.get(interaction.message.interaction.id) != interaction.user.id:
+            return await interaction.response.send_message("❌ No puedes usar este panel.", ephemeral=True)
 
         class MensajeModal(discord.ui.Modal, title="Cambiar mensaje de bienvenida"):
             mensaje = discord.ui.TextInput(
@@ -183,9 +208,13 @@ class WelcomePage2(discord.ui.View):
 
         await interaction.response.send_modal(MensajeModal())
 
-    @discord.ui.button(label="Página 3 → Imagen", style=discord.ButtonStyle.success)
+    @discord.ui.button(label="Página 3 → Imagen", style=discord.ButtonStyle.success, custom_id="welcome_page3")
     async def pagina3(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("Cargando página 3...", ephemeral=True)
+
+        if active_panels.get(interaction.message.interaction.id) != interaction.user.id:
+            return await interaction.response.send_message("❌ No puedes usar este panel.", ephemeral=True)
+
+        await load_page3(interaction)
 
 
 # ============================
@@ -193,16 +222,14 @@ class WelcomePage2(discord.ui.View):
 # ============================
 
 class WelcomePage3(discord.ui.View):
-    def __init__(self, bot, user_id):
-        super().__init__(timeout=120)
-        self.bot = bot
-        self.user_id = user_id
+    def __init__(self):
+        super().__init__(timeout=None)
 
-    async def interaction_check(self, interaction):
-        return interaction.user.id == self.user_id
-
-    @discord.ui.button(label="Poner URL", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="Poner URL", style=discord.ButtonStyle.primary, custom_id="welcome_set_image_url")
     async def poner_url(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        if active_panels.get(interaction.message.interaction.id) != interaction.user.id:
+            return await interaction.response.send_message("❌ No puedes usar este panel.", ephemeral=True)
 
         class URLModal(discord.ui.Modal, title="Poner URL de imagen"):
             url = discord.ui.TextInput(label="URL de la imagen")
@@ -221,8 +248,12 @@ class WelcomePage3(discord.ui.View):
 
         await interaction.response.send_modal(URLModal())
 
-    @discord.ui.button(label="Adjuntar imagen", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="Adjuntar imagen", style=discord.ButtonStyle.secondary, custom_id="welcome_set_image_file")
     async def adjuntar(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        if active_panels.get(interaction.message.interaction.id) != interaction.user.id:
+            return await interaction.response.send_message("❌ No puedes usar este panel.", ephemeral=True)
+
         await interaction.response.send_message(
             "Adjunta una imagen en tu siguiente mensaje.",
             ephemeral=True
@@ -231,7 +262,7 @@ class WelcomePage3(discord.ui.View):
         def check(msg):
             return msg.author.id == interaction.user.id and msg.attachments
 
-        msg = await self.bot.wait_for("message", check=check)
+        msg = await interaction.client.wait_for("message", check=check)
         imagen_url = msg.attachments[0].url
 
         guild_id = str(interaction.guild.id)
@@ -241,8 +272,12 @@ class WelcomePage3(discord.ui.View):
 
         await interaction.followup.send("Imagen guardada correctamente.", ephemeral=True)
 
-    @discord.ui.button(label="Quitar imagen", style=discord.ButtonStyle.danger)
+    @discord.ui.button(label="Quitar imagen", style=discord.ButtonStyle.danger, custom_id="welcome_remove_image")
     async def quitar(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        if active_panels.get(interaction.message.interaction.id) != interaction.user.id:
+            return await interaction.response.send_message("❌ No puedes usar este panel.", ephemeral=True)
+
         guild_id = str(interaction.guild.id)
         data = load_welcome()
 
@@ -251,9 +286,13 @@ class WelcomePage3(discord.ui.View):
 
         await interaction.response.send_message("Imagen eliminada.", ephemeral=True)
 
-    @discord.ui.button(label="Página 4 → Vista previa", style=discord.ButtonStyle.success)
+    @discord.ui.button(label="Página 4 → Vista previa", style=discord.ButtonStyle.success, custom_id="welcome_page4")
     async def pagina4(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("Cargando vista previa...", ephemeral=True)
+
+        if active_panels.get(interaction.message.interaction.id) != interaction.user.id:
+            return await interaction.response.send_message("❌ No puedes usar este panel.", ephemeral=True)
+
+        await load_page4(interaction)
 
 
 # ============================
@@ -261,16 +300,15 @@ class WelcomePage3(discord.ui.View):
 # ============================
 
 class WelcomePage4(discord.ui.View):
-    def __init__(self, bot, user_id):
-        super().__init__(timeout=120)
-        self.bot = bot
-        self.user_id = user_id
+    def __init__(self):
+        super().__init__(timeout=None)
 
-    async def interaction_check(self, interaction):
-        return interaction.user.id == self.user_id
-
-    @discord.ui.button(label="Ver vista previa", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="Ver vista previa", style=discord.ButtonStyle.primary, custom_id="welcome_preview")
     async def preview(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        if active_panels.get(interaction.message.interaction.id) != interaction.user.id:
+            return await interaction.response.send_message("❌ No puedes usar este panel.", ephemeral=True)
+
         guild_id = str(interaction.guild.id)
         data = load_welcome()
         cfg = data[guild_id]
@@ -289,53 +327,137 @@ class WelcomePage4(discord.ui.View):
         else:
             await interaction.response.send_message(mensaje, ephemeral=True)
 
+    # ⭐ BOTÓN NUEVO: PROBAR BIENVENIDA
+    @discord.ui.button(label="Probar bienvenida", style=discord.ButtonStyle.success, custom_id="welcome_test")
+    async def test_welcome(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-# ============================
-# EVENTO REAL DE BIENVENIDA
-# ============================
+        if active_panels.get(interaction.message.interaction.id) != interaction.user.id:
+            return await interaction.response.send_message("❌ No puedes usar este panel.", ephemeral=True)
 
-    @commands.Cog.listener()
-    async def on_member_join(self, member: discord.Member):
+        guild_id = str(interaction.guild.id)
         data = load_welcome()
-        guild_id = str(member.guild.id)
-
-        if guild_id not in data:
-            return
-
         cfg = data[guild_id]
 
-        if not cfg["enabled"] or not cfg["canal"]:
-            return
-
-        canal = member.guild.get_channel(cfg["canal"])
-        if not canal:
-            return
-
         mensaje = cfg["mensaje"]
-        mensaje = mensaje.replace("{user}", member.mention)
-        mensaje = mensaje.replace("{server}", member.guild.name)
-        mensaje = mensaje.replace("{membercount}", str(member.guild.member_count))
+        mensaje = mensaje.replace("{user}", interaction.user.mention)
+        mensaje = mensaje.replace("{server}", interaction.guild.name)
+        mensaje = mensaje.replace("{membercount}", str(interaction.guild.member_count))
+
+        canal = None
+        if cfg["canal"]:
+            canal = interaction.guild.get_channel(cfg["canal"])
+
+        if not canal:
+            canal = interaction.channel
 
         if cfg["imagen"]:
             async with aiohttp.ClientSession() as session:
                 async with session.get(cfg["imagen"]) as resp:
                     img = await resp.read()
-                    file = discord.File(io.BytesIO(img), filename="welcome.png")
-                    await canal.send(mensaje, file=file)
+                    file = discord.File(io.BytesIO(img), filename="welcome_test.png")
+                    await canal.send(f"📢 **Bienvenida de prueba:**\n{mensaje}", file=file)
         else:
-            await canal.send(mensaje)
+            await canal.send(f"📢 **Bienvenida de prueba:**\n{mensaje}")
 
+        await interaction.response.send_message("✅ Bienvenida enviada correctamente.", ephemeral=True)
 
 
 # ============================
-# SETUP FINAL DEL COG
+# FUNCIONES DE CAMBIO DE PÁGINA
+# ============================
+
+async def update_page1(interaction, estado):
+    guild_id = str(interaction.guild.id)
+    data = load_welcome()
+    cfg = data[guild_id]
+
+    embed = discord.Embed(
+        title="🎉 Panel de Bienvenida — Página 1",
+        description="Configura el sistema de bienvenida.",
+        color=discord.Color.green()
+    )
+
+    canal = f"<#{cfg['canal']}>" if cfg["canal"] else "❌ No configurado"
+    logs = f"<#{cfg['logs']}>" if cfg["logs"] else "❌ No configurado"
+
+    embed.add_field(name="Estado", value=estado, inline=False)
+    embed.add_field(name="Canal", value=canal, inline=False)
+    embed.add_field(name="Logs", value=logs, inline=False)
+
+    await interaction.response.edit_message(embed=embed, view=WelcomePage1())
+
+
+async def load_page2(interaction):
+    embed = discord.Embed(
+        title="📝 Página 2 — Mensaje",
+        description="Configura el mensaje de bienvenida.",
+        color=discord.Color.blue()
+    )
+    await interaction.response.edit_message(embed=embed, view=WelcomePage2())
+
+
+async def load_page3(interaction):
+    embed = discord.Embed(
+        title="🖼️ Página 3 — Imagen",
+        description="Configura la imagen de bienvenida.",
+        color=discord.Color.orange()
+    )
+    await interaction.response.edit_message(embed=embed, view=WelcomePage3())
+
+
+async def load_page4(interaction):
+    embed = discord.Embed(
+        title="👀 Página 4 — Vista previa",
+        description="Mira cómo quedará la bienvenida.",
+        color=discord.Color.purple()
+    )
+    await interaction.response.edit_message(embed=embed, view=WelcomePage4())
+
+
+# ============================
+# EVENTO REAL DE BIENVENIDA
+# ============================
+
+@commands.Cog.listener()
+async def on_member_join(self, member: discord.Member):
+    data = load_welcome()
+    guild_id = str(member.guild.id)
+
+    if guild_id not in data:
+        return
+
+    cfg = data[guild_id]
+
+    if not cfg["enabled"] or not cfg["canal"]:
+        return
+
+    canal = member.guild.get_channel(cfg["canal"])
+    if not canal:
+        return
+
+    mensaje = cfg["mensaje"]
+    mensaje = mensaje.replace("{user}", member.mention)
+    mensaje = mensaje.replace("{server}", member.guild.name)
+    mensaje = mensaje.replace("{membercount}", str(member.guild.member_count))
+
+    if cfg["imagen"]:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(cfg["imagen"]) as resp:
+                img = await resp.read()
+                file = discord.File(io.BytesIO(img), filename="welcome.png")
+                await canal.send(mensaje, file=file)
+    else:
+        await canal.send(mensaje)
+
+
+# ============================
+# SETUP FINAL
 # ============================
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(WelcomeCog(bot))
 
-    # Registrar vistas persistentes
-    bot.add_view(WelcomePage1(bot, 0))
-    bot.add_view(WelcomePage2(bot, 0))
-    bot.add_view(WelcomePage3(bot, 0))
-    bot.add_view(WelcomePage4(bot, 0))
+    bot.add_view(WelcomePage1())
+    bot.add_view(WelcomePage2())
+    bot.add_view(WelcomePage3())
+    bot.add_view(WelcomePage4())
