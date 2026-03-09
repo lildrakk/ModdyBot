@@ -122,7 +122,7 @@ class AntiLinksCog(commands.Cog):
         # Guardar página del usuario
         self.user_pages[interaction.user.id] = 1
 
-        # Panel inicial (se envía como mensaje nuevo)
+        # Panel inicial
         await self.build_panel(interaction, page=1, initial=True)
 
     # ============================
@@ -282,144 +282,11 @@ class AntiLinksCog(commands.Cog):
             max_values=min(len(options), 25),
             options=options[:25],
             custom_id="select_allowed_servers"
-            )
-
-
-
-# ============================
-    # BOTONES PRINCIPALES
-    # ============================
-
-    def main_buttons(self, guild_id: str, page: int):
-
-        cfg = self.config[guild_id]
-
-        # Botón activar/desactivar
-        btn_enable = discord.ui.Button(
-            label="🟢 Activado" if cfg["enabled"] else "🔴 Desactivado",
-            style=discord.ButtonStyle.green if cfg["enabled"] else discord.ButtonStyle.red,
-            custom_id="toggle_enabled"
         )
 
-        # Botón guardar
-        btn_save = discord.ui.Button(
-            label="💾 Guardar",
-            style=discord.ButtonStyle.blurple,
-            custom_id="save_antilinks"
-        )
 
-        # Botón test (solo página 6)
-        btn_test = None
-        if page == 6:
-            btn_test = discord.ui.Button(
-                label="🧪 Test Anti‑Links",
-                style=discord.ButtonStyle.gray,
-                custom_id="test_antilinks"
-            )
-
-        return btn_enable, btn_save, btn_test
-
-    # ============================
-    # BOTONES DE NAVEGACIÓN
-    # ============================
-
-    def nav_buttons(self, page: int):
-
-        buttons = []
-
-        if page > 1:
-            buttons.append(
-                discord.ui.Button(
-                    label="⬅ Anterior",
-                    style=discord.ButtonStyle.secondary,
-                    custom_id="prev_page"
-                )
-            )
-
-        if page < 6:
-            buttons.append(
-                discord.ui.Button(
-                    label="Siguiente ➡",
-                    style=discord.ButtonStyle.secondary,
-                    custom_id="next_page"
-                )
-            )
-
-        return buttons
-
-    # ============================
-    # PANEL PRINCIPAL
-    # ============================
-
-    async def build_panel(self, interaction: discord.Interaction, page: int, initial=False):
-
-        guild = interaction.guild
-        guild_id = str(guild.id)
-        cfg = self.ensure_guild_config(guild_id)
-
-        embed = self.embed_page(page)
-        view = discord.ui.View(timeout=None)
 
         # ============================
-        # SELECTS POR PÁGINA
-        # ============================
-
-        if page == 1:
-            view.add_item(self.select_roles_allowed(guild, guild_id))
-
-        elif page == 2:
-            view.add_item(self.select_whitelist_users(guild, guild_id))
-
-        elif page == 3:
-            view.add_item(self.select_whitelist_roles(guild, guild_id))
-
-        elif page == 4:
-            view.add_item(self.select_whitelist_domains(guild_id))
-
-            # ➕ BOTÓN AÑADIR DOMINIO
-            add_domain_btn = discord.ui.Button(
-                label="➕ Añadir dominio",
-                style=discord.ButtonStyle.green,
-                custom_id="add_domain"
-            )
-            view.add_item(add_domain_btn)
-
-        elif page == 5:
-            view.add_item(self.select_allowed_servers(guild_id))
-
-        # ============================
-        # BOTONES PRINCIPALES
-        # ============================
-
-        btn_enable, btn_save, btn_test = self.main_buttons(guild_id, page)
-        view.add_item(btn_enable)
-        view.add_item(btn_save)
-
-        if btn_test:
-            view.add_item(btn_test)
-
-        # ============================
-        # BOTONES DE NAVEGACIÓN
-        # ============================
-
-        for btn in self.nav_buttons(page):
-            view.add_item(btn)
-
-        # ============================
-        # ENVÍO / EDICIÓN DEL PANEL
-        # ============================
-
-        if initial:
-            # Primer mensaje del panel
-            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-        else:
-            # Edición del panel existente
-            if not interaction.response.is_done():
-                await interaction.response.edit_message(embed=embed, view=view)
-            else:
-                await interaction.message.edit(embed=embed, view=view)
-
-    # ============================
     # MANEJADOR DE INTERACCIONES
     # ============================
 
@@ -523,13 +390,26 @@ class AntiLinksCog(commands.Cog):
             return await interaction.response.send_modal(AddDomainModal(self, guild_id))
 
     # ============================
-    # DETECCIÓN DE LINKS
+    # DETECCIÓN DE LINKS (CORREGIDA)
     # ============================
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
 
+        # IGNORAR MENSAJES DEL BOT
         if message.author.bot:
+            return
+
+        # IGNORAR MENSAJES SIN CONTENIDO (interacciones, botones, modales)
+        if not message.content:
+            return
+
+        # IGNORAR MENSAJES DE INTERACCIONES
+        if isinstance(message, discord.InteractionMessage):
+            return
+
+        # IGNORAR MENSAJES EPHEMERAL (no existen realmente)
+        if hasattr(message, "flags") and message.flags.ephemeral:
             return
 
         guild = message.guild
