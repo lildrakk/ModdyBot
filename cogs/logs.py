@@ -3,180 +3,333 @@ from discord.ext import commands
 from discord import app_commands
 import json
 import os
-import asyncio
+import datetime
 
 
 LOGS_FILE = "logs_config.json"
 
 
 # ============================
-# JSON LOADER
+# JSON SEGURO Y AUTOCORREGIDO
 # ============================
 
-def load_logs():  # ← FUNCIÓN CORREGIDA
+def load_logs():
     if not os.path.exists(LOGS_FILE):
         with open(LOGS_FILE, "w") as f:
             json.dump({}, f, indent=4)
         return {}
 
-    with open(LOGS_FILE, "r") as f:
-        try:
+    try:
+        with open(LOGS_FILE, "r") as f:
             data = json.load(f)
-        except:
-            return {}
+    except:
+        # JSON corrupto → lo regeneramos
+        with open(LOGS_FILE, "w") as f:
+            json.dump({}, f, indent=4)
+        return {}
 
-    # 🔧 AUTOCORRECCIÓN DEL JSON
-    # Si algún servidor tiene un valor inválido (int, string, etc),
-    # lo repara automáticamente para evitar errores.
-    for guild_id, value in list(data.items()):
-        if not isinstance(value, dict):
-            data[guild_id] = {
-                "enabled": False,
-                "channel": None,
-                "events": {
-                    "joins": True,
-                    "leaves": True,
-                    "bans": True,
-                    "unbans": True,
-                    "messages_delete": True,
-                    "messages_edit": True,
-                    "commands": True
-                }
-            }
+    # Autocorrección por si algo está mal
+    for guild_id, cfg in list(data.items()):
+        if not isinstance(cfg, dict):
+            data[guild_id] = {}
+
+        cfg.setdefault("enabled", False)
+        cfg.setdefault("channel", None)
+        cfg.setdefault("events", {})
 
     return data
 
 
-def save_logs(data):  # ← ESTO NO SE TOCA
+def save_logs(data):
     with open(LOGS_FILE, "w") as f:
         json.dump(data, f, indent=4)
 
 
 # ============================
-# COG DE LOGS
+# FORMATEADORES PROFESIONALES
 # ============================
 
-class LogsCog(commands.Cog):
+def format_timestamp():
+    now = datetime.datetime.now()
+    fecha = now.strftime("%d/%m/%Y")
+    hora = now.strftime("%H:%M:%S")
+    return fecha, hora
+
+
+def format_id(obj):
+    return f"`{obj.id}`" if obj else "`N/A`"
+
+
+def safe_name(obj):
+    return obj.name if obj else "Desconocido"
+
+
+def safe_mention(obj):
+    try:
+        return obj.mention
+    except:
+        return "N/A"
+
+
+# ============================
+# SISTEMA DE COLORES POR EVENTO
+# ============================
+
+EVENT_COLORS = {
+    "join": discord.Color.green(),
+    "leave": discord.Color.red(),
+    "ban": discord.Color.dark_red(),
+    "unban": discord.Color.green(),
+    "msg_delete": discord.Color.red(),
+    "msg_edit": discord.Color.yellow(),
+    "role_add": discord.Color.green(),
+    "role_remove": discord.Color.red(),
+    "channel_create": discord.Color.green(),
+    "channel_delete": discord.Color.red(),
+    "channel_update": discord.Color.yellow(),
+    "boost": discord.Color.magenta(),
+    "command": discord.Color.blue(),
+    "emoji_add": discord.Color.green(),
+    "emoji_remove": discord.Color.red(),
+    "emoji_update": discord.Color.yellow(),
+    "invite_create": discord.Color.green(),
+    "invite_delete": discord.Color.red(),
+    "thread_create": discord.Color.green(),
+    "thread_update": discord.Color.yellow(),
+}
+
+
+# ============================
+# ICONOS PROFESIONALES
+# ============================
+
+EVENT_ICONS = {
+    "join": "🟢",
+    "leave": "🔴",
+    "ban": "🔨",
+    "unban": "♻️",
+    "msg_delete": "🗑️",
+    "msg_edit": "✏️",
+    "role_add": "➕",
+    "role_remove": "➖",
+    "channel_create": "📁",
+    "channel_delete": "🗑️",
+    "channel_update": "✏️",
+    "boost": "💎",
+    "command": "📌",
+    "emoji_add": "😃",
+    "emoji_remove": "❌",
+    "emoji_update": "✏️",
+    "invite_create": "🔗",
+    "invite_delete": "❌",
+    "thread_create": "🧵",
+    "thread_update": "✏️",
+}
+
+
+# ============================
+# GENERADOR DE EMBEDS ULTRA PRO
+# ============================
+
+def create_log_embed(event_key: str, title: str, description: str, guild: discord.Guild):
+    fecha, hora = format_timestamp()
+
+    embed = discord.Embed(
+        title=f"{EVENT_ICONS.get(event_key, '📄')} {title}",
+        description=description,
+        color=EVENT_COLORS.get(event_key, discord.Color.blurple())
+    )
+
+    embed.add_field(name="📅 Fecha", value=fecha, inline=True)
+    embed.add_field(name="🕒 Hora", value=hora, inline=True)
+    embed.add_field(name="🏠 Servidor", value=f"{guild.name}\nID: `{guild.id}`", inline=False)
+
+    if guild.icon:
+        embed.set_thumbnail(url=guild.icon.url)
+
+    return embed
+
+
+# ============================
+# COG BASE
+# ============================
+
+class UltraLogs(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.logs = load_logs()
+        self.user_pages = {}
+
+    # ============================
+    # Enviar log (usado por TODOS los eventos)
+    # ============================
+
+    async def send_log(self, guild: discord.Guild, embed: discord.Embed, event_key: str):
+        guild_id = str(guild.id)
+
+        if guild_id not in self.logs:
+            return
+
+        cfg = self.logs[guild_id]
+
+        if not cfg.get("enabled", False):
+            return
+
+        if not cfg["events"].get(event_key, True):
+            return
+
+        channel_id = cfg.get("channel")
+        if not channel_id:
+            return
+
+        channel = guild.get_channel(channel_id)
+        if not channel:
+            return
+
+        try:
+            await channel.send(embed=embed)
+        except:
+            pass 
+
+
+
+
+# ============================
+    # EMBEDS DEL PANEL
+    # ============================
+
+    def panel_embed(self, page: int):
+        titles = {
+            1: "⚙️ Configuración General",
+            2: "🧍 Eventos de Usuarios",
+            3: "💬 Eventos de Mensajes",
+            4: "🛡️ Eventos de Roles",
+            5: "📁 Eventos de Canales",
+            6: "✨ Eventos Avanzados"
+        }
+
+        descriptions = {
+            1: "Selecciona el canal de logs y activa/desactiva el sistema.",
+            2: "Configura entradas, salidas, baneos, unbaneos y cambios de usuario.",
+            3: "Configura mensajes eliminados, editados, con archivos, stickers, etc.",
+            4: "Configura creación, eliminación y cambios de roles.",
+            5: "Configura creación, eliminación y cambios de canales.",
+            6: "Configura boosts, invites, threads, emojis y comandos."
+        }
+
+        embed = discord.Embed(
+            title=titles.get(page, "Panel"),
+            description=descriptions.get(page, ""),
+            color=discord.Color.blurple()
+        )
+
+        embed.set_footer(text=f"Página {page}/6")
+        return embed
 
 
     # ============================
-    # Embeds por página
+    # SELECT DE EVENTOS POR PÁGINA
     # ============================
 
-    def embed_page(self, page: int):
-        if page == 1:
-            embed = discord.Embed(
-                title="⚙️ Configuración General",
-                description="Selecciona el canal de logs y activa/desactiva el sistema.",
-                color=discord.Color.blue()
-            )
-            return embed
-
-        elif page == 2:
-            embed = discord.Embed(
-                title="🧍 Logs de Usuarios",
-                description="Configura entradas, salidas, baneos y unbaneos.",
-                color=discord.Color.green()
-            )
-            return embed
-
-        elif page == 3:
-            embed = discord.Embed(
-                title="💬 Logs de Mensajes",
-                description="Configura mensajes eliminados y editados.",
-                color=discord.Color.yellow()
-            )
-            return embed
-
-        elif page == 4:
-            embed = discord.Embed(
-                title="🛡️ Logs de Roles",
-                description="Configura roles añadidos y eliminados.",
-                color=discord.Color.purple()
-            )
-            return embed
-
-        elif page == 5:
-            embed = discord.Embed(
-                title="📁 Logs de Canales",
-                description="Configura creación, eliminación y renombrado de canales.",
-                color=discord.Color.orange()
-            )
-            return embed
-
-        elif page == 6:
-            embed = discord.Embed(
-                title="✨ Logs Avanzados",
-                description="Configura boosts y comandos usados.",
-                color=discord.Color.magenta()
-            )
-            return embed
-
-
-    # ============================
-    # Select de categorías por página
-    # ============================
-
-    def select_events(self, page: int, guild_id: str):
-
-        options = []
-
+    def event_options(self, page: int):
         if page == 2:
-            options = [
-                discord.SelectOption(label="Entradas", value="joins"),
-                discord.SelectOption(label="Salidas", value="leaves"),
-                discord.SelectOption(label="Baneos", value="bans"),
-                discord.SelectOption(label="Unbaneos", value="unbans"),
+            return [
+                ("joins", "Entradas"),
+                ("leaves", "Salidas"),
+                ("bans", "Baneos"),
+                ("unbans", "Unbaneos"),
+                ("nick_change", "Cambio de nick"),
+                ("avatar_change", "Cambio de avatar"),
             ]
 
-        elif page == 3:
-            options = [
-                discord.SelectOption(label="Mensajes eliminados", value="messages_delete"),
-                discord.SelectOption(label="Mensajes editados", value="messages_edit"),
+        if page == 3:
+            return [
+                ("messages_delete", "Mensajes eliminados"),
+                ("messages_edit", "Mensajes editados"),
+                ("messages_files", "Mensajes con archivos"),
+                ("messages_stickers", "Mensajes con stickers"),
+                ("messages_links", "Mensajes con links"),
             ]
 
-        elif page == 4:
-            options = [
-                discord.SelectOption(label="Rol añadido", value="roles_add"),
-                discord.SelectOption(label="Rol quitado", value="roles_remove"),
+        if page == 4:
+            return [
+                ("roles_add", "Rol añadido"),
+                ("roles_remove", "Rol quitado"),
+                ("roles_create", "Rol creado"),
+                ("roles_delete", "Rol eliminado"),
+                ("roles_update", "Rol actualizado"),
             ]
 
-        elif page == 5:
-            options = [
-                discord.SelectOption(label="Canal creado", value="channels_create"),
-                discord.SelectOption(label="Canal eliminado", value="channels_delete"),
-                discord.SelectOption(label="Canal renombrado", value="channels_update"),
+        if page == 5:
+            return [
+                ("channels_create", "Canal creado"),
+                ("channels_delete", "Canal eliminado"),
+                ("channels_update", "Canal actualizado"),
+                ("channels_perms", "Permisos cambiados"),
             ]
 
-        elif page == 6:
-            options = [
-                discord.SelectOption(label="Boosts", value="boosts"),
-                discord.SelectOption(label="Comandos usados", value="commands"),
+        if page == 6:
+            return [
+                ("boosts", "Boosts"),
+                ("invites_create", "Invitación creada"),
+                ("invites_delete", "Invitación eliminada"),
+                ("threads_create", "Thread creado"),
+                ("threads_update", "Thread actualizado"),
+                ("emoji_add", "Emoji añadido"),
+                ("emoji_remove", "Emoji eliminado"),
+                ("emoji_update", "Emoji actualizado"),
+                ("commands", "Comandos usados"),
             ]
 
-        # Estado actual
-        selected = []
-        if guild_id in self.logs:
-            for event, enabled in self.logs[guild_id]["events"].items():
-                if enabled:
-                    selected.append(event)
+        return []
 
-        select = discord.ui.Select(
+
+    def build_event_select(self, guild_id: str, page: int):
+        options = []
+        current = self.logs[guild_id]["events"]
+
+        for key, label in self.event_options(page):
+            options.append(
+                discord.SelectOption(
+                    label=label,
+                    value=key,
+                    default=current.get(key, True)
+                )
+            )
+
+        return discord.ui.Select(
             placeholder="Selecciona eventos para activar/desactivar",
             min_values=0,
             max_values=len(options),
             options=options,
-            custom_id=f"select_events_page_{page}"
+            custom_id=f"events_page_{page}"
         )
-
-        return select
 
 
     # ============================
-    # Botones de navegación
+    # BOTONES PRINCIPALES
+    # ============================
+
+    def main_buttons(self, guild_id: str):
+        enabled = self.logs[guild_id]["enabled"]
+
+        btn_toggle = discord.ui.Button(
+            label="🟢 Activar Logs" if not enabled else "🔴 Desactivar Logs",
+            style=discord.ButtonStyle.green if not enabled else discord.ButtonStyle.red,
+            custom_id="toggle_logs"
+        )
+
+        btn_save = discord.ui.Button(
+            label="💾 Guardar",
+            style=discord.ButtonStyle.blurple,
+            custom_id="save_logs"
+        )
+
+        return btn_toggle, btn_save
+
+
+    # ============================
+    # BOTONES DE NAVEGACIÓN
     # ============================
 
     def nav_buttons(self, page: int):
@@ -200,90 +353,36 @@ class LogsCog(commands.Cog):
 
 
     # ============================
-    # Botones principales
+    # PANEL PRINCIPAL
     # ============================
 
-    def main_buttons(self, guild_id: str, page: int):
-
-        enabled = self.logs.get(guild_id, {}).get("enabled", False)
-
-        btn_enable = discord.ui.Button(
-            label="🟢 Activar logs" if not enabled else "🔴 Desactivar logs",
-            style=discord.ButtonStyle.green if not enabled else discord.ButtonStyle.red,
-            custom_id="toggle_logs"
-        )
-
-        btn_save = discord.ui.Button(
-            label="🔵 Guardar",
-            style=discord.ButtonStyle.blurple,
-            custom_id="save_logs"
-        )
-
-        btn_test = None
-        if page == 6:
-            btn_test = discord.ui.Button(
-                label="🟣 Test Log",
-                style=discord.ButtonStyle.blurple,
-                custom_id="test_log"
-            )
-
-        return btn_enable, btn_save, btn_test
-
-
-    # ============================
-    # Construcción del panel
-    # ============================
-
-    async def build_panel(self, interaction: discord.Interaction, page: int):
+    async def open_panel(self, interaction: discord.Interaction, page: int = 1):
         guild_id = str(interaction.guild.id)
 
-        # Crear vista
-        view = discord.ui.View(timeout=300)  # 5 minutos
+        embed = self.panel_embed(page)
+        view = discord.ui.View(timeout=300)
 
-        # Embeds por página
-        embed = self.embed_page(page)
-
-        # ============================
-        # Página 1: Configuración general
-        # ============================
+        # Página 1 → selección de canal
         if page == 1:
-            # Selector de canal
             channel_select = discord.ui.ChannelSelect(
                 placeholder="Selecciona el canal de logs",
                 channel_types=[discord.ChannelType.text],
-                custom_id="select_channel"
+                custom_id="select_log_channel"
             )
             view.add_item(channel_select)
 
-            # Botones principales
-            btn_enable, btn_save, _ = self.main_buttons(guild_id, page)
-            view.add_item(btn_enable)
-            view.add_item(btn_save)
-
-        # ============================
-        # Páginas 2 a 6: Select de eventos
-        # ============================
+        # Páginas 2–6 → selección de eventos
         else:
-            select = self.select_events(page, guild_id)
-            view.add_item(select)
+            view.add_item(self.build_event_select(guild_id, page))
 
-            # Botones principales
-            btn_enable, btn_save, btn_test = self.main_buttons(guild_id, page)
-            view.add_item(btn_enable)
-            view.add_item(btn_save)
+        # Botones principales
+        btn_toggle, btn_save = self.main_buttons(guild_id)
+        view.add_item(btn_toggle)
+        view.add_item(btn_save)
 
-            if btn_test:
-                view.add_item(btn_test)
-
-        # ============================
-        # Botones de navegación
-        # ============================
+        # Navegación
         for btn in self.nav_buttons(page):
             view.add_item(btn)
-
-        # Guardar la página actual en el estado del usuario
-        if not hasattr(self, "user_pages"):
-            self.user_pages = {}
 
         self.user_pages[interaction.user.id] = page
 
@@ -291,7 +390,7 @@ class LogsCog(commands.Cog):
 
 
     # ============================
-    # Comando /logs
+    # COMANDO /logs
     # ============================
 
     @app_commands.command(name="logs", description="Abre el panel de configuración de logs")
@@ -302,389 +401,533 @@ class LogsCog(commands.Cog):
         # Crear config si no existe
         if guild_id not in self.logs:
             self.logs[guild_id] = {
-                "channel": None,
                 "enabled": False,
-                "events": {
-                    "joins": True,
-                    "leaves": True,
-                    "bans": True,
-                    "unbans": True,
-                    "messages_delete": True,
-                    "messages_edit": True,
-                    "roles_add": True,
-                    "roles_remove": True,
-                    "channels_create": True,
-                    "channels_delete": True,
-                    "channels_update": True,
-                    "boosts": True,
-                    "commands": True
-                }
+                "channel": None,
+                "events": {}
             }
             save_logs(self.logs)
 
-        # Abrir panel en página 1
-        await self.build_panel(interaction, page=1)
+        await self.open_panel(interaction, page=1)
 
 
     # ============================
-    # Listener de componentes
+    # LISTENER DE COMPONENTES
     # ============================
 
     @commands.Cog.listener()
     async def on_interaction(self, interaction: discord.Interaction):
 
-        if not interaction.type == discord.InteractionType.component:
+        if interaction.type != discord.InteractionType.component:
             return
 
-        custom_id = interaction.data.get("custom_id")
+        custom = interaction.data.get("custom_id")
         user_id = interaction.user.id
 
-        # Verificar que el usuario tenga una página activa
-        if not hasattr(self, "user_pages") or user_id not in self.user_pages:
+        if user_id not in self.user_pages:
             return
 
         page = self.user_pages[user_id]
         guild_id = str(interaction.guild.id)
 
-        # ============================
         # Navegación
-        # ============================
-
-        if custom_id == "next_page":
+        if custom == "next_page":
             page = min(6, page + 1)
             self.user_pages[user_id] = page
             return await self.update_panel(interaction, page)
 
-        if custom_id == "prev_page":
+        if custom == "prev_page":
             page = max(1, page - 1)
             self.user_pages[user_id] = page
             return await self.update_panel(interaction, page)
 
-        # ============================
-        # Activar / Desactivar logs
-        # ============================
-
-        if custom_id == "toggle_logs":
-            current = self.logs[guild_id]["enabled"]
-            self.logs[guild_id]["enabled"] = not current
+        # Activar / desactivar logs
+        if custom == "toggle_logs":
+            self.logs[guild_id]["enabled"] = not self.logs[guild_id]["enabled"]
             save_logs(self.logs)
             return await self.update_panel(interaction, page)
 
-        # ============================
-        # Guardar configuración
-        # ============================
-
-        if custom_id == "save_logs":
+        # Guardar
+        if custom == "save_logs":
             save_logs(self.logs)
             return await interaction.response.send_message(
-                "✅ Configuración guardada correctamente.",
+                "💾 Configuración guardada.",
                 ephemeral=True
             )
 
-        # ============================
-        # Test Log
-        # ============================
-
-        if custom_id == "test_log":
-            channel_id = self.logs[guild_id].get("channel")
-            channel = interaction.guild.get_channel(channel_id)
-
-            if not channel:
-                return await interaction.response.send_message(
-                    "❌ No hay canal configurado.",
-                    ephemeral=True
-                )
-
-            embed = discord.Embed(
-                title="🟣 Test Log",
-                description="Este es un mensaje de prueba.",
-                color=discord.Color.magenta()
-            )
-            await channel.send(embed=embed)
-
-            return await interaction.response.send_message(
-                "🟣 Test enviado correctamente.",
-                ephemeral=True
-            )
-
-        # ============================
-        # Selector de canal
-        # ============================
-
-        if custom_id == "select_channel":
-            channel = interaction.data["values"][0]
-            channel_obj = interaction.guild.get_channel(int(channel))
-
-            self.logs[guild_id]["channel"] = channel_obj.id
+        # Selección de canal
+        if custom == "select_log_channel":
+            channel_id = int(interaction.data["values"][0])
+            self.logs[guild_id]["channel"] = channel_id
             save_logs(self.logs)
-
             return await self.update_panel(interaction, page)
 
-        # ============================
-        # Select de eventos
-        # ============================
-
-        if custom_id.startswith("select_events_page_"):
+        # Selección de eventos
+        if custom.startswith("events_page_"):
             selected = interaction.data.get("values", [])
+            all_events = [key for key, _ in self.event_options(page)]
 
-            # Resetear todos los eventos de esa página
-            for event in self.logs[guild_id]["events"]:
-                if event in selected:
-                    self.logs[guild_id]["events"][event] = True
-                else:
-                    # Solo desactivar si pertenece a esta página
-                    pass
+            for ev in all_events:
+                self.logs[guild_id]["events"][ev] = ev in selected
 
             save_logs(self.logs)
             return await self.update_panel(interaction, page)
 
 
     # ============================
-    # Actualizar panel sin recrearlo
+    # ACTUALIZAR PANEL
     # ============================
 
     async def update_panel(self, interaction: discord.Interaction, page: int):
-        embed = self.embed_page(page)
+        embed = self.panel_embed(page)
         view = discord.ui.View(timeout=300)
 
         guild_id = str(interaction.guild.id)
 
-        # Página 1
         if page == 1:
             channel_select = discord.ui.ChannelSelect(
                 placeholder="Selecciona el canal de logs",
                 channel_types=[discord.ChannelType.text],
-                custom_id="select_channel"
+                custom_id="select_log_channel"
             )
             view.add_item(channel_select)
-
-            btn_enable, btn_save, _ = self.main_buttons(guild_id, page)
-            view.add_item(btn_enable)
-            view.add_item(btn_save)
-
-        # Páginas 2 a 6
         else:
-            select = self.select_events(page, guild_id)
-            view.add_item(select)
+            view.add_item(self.build_event_select(guild_id, page))
 
-            btn_enable, btn_save, btn_test = self.main_buttons(guild_id, page)
-            view.add_item(btn_enable)
-            view.add_item(btn_save)
+        btn_toggle, btn_save = self.main_buttons(guild_id)
+        view.add_item(btn_toggle)
+        view.add_item(btn_save)
 
-            if btn_test:
-                view.add_item(btn_test)
-
-        # Navegación
         for btn in self.nav_buttons(page):
             view.add_item(btn)
 
         await interaction.response.edit_message(embed=embed, view=view)
 
 
-    # ============================
-    # Función para enviar logs
-    # ============================
 
-    async def send_log(self, guild: discord.Guild, embed: discord.Embed, event_key: str):
-        guild_id = str(guild.id)
-
-        # Si no hay config → no enviar nada
-        if guild_id not in self.logs:
-            return
-
-        config = self.logs[guild_id]
-
-        # Logs desactivados
-        if not config.get("enabled", False):
-            return
-
-        # Evento desactivado
-        if not config["events"].get(event_key, False):
-            return
-
-        # Canal no configurado
-        channel_id = config.get("channel")
-        if not channel_id:
-            return
-
-        channel = guild.get_channel(channel_id)
-        if not channel:
-            return
-
-        try:
-            await channel.send(embed=embed)
-        except:
-            pass
-
-
-    # ============================
-    # EVENTOS DE LOGS
+# ============================
+    # EVENTOS — USUARIOS
     # ============================
 
-    # --- ENTRADAS ---
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
-        embed = discord.Embed(
-            title="🟢 Usuario entró",
-            description=f"{member.mention} ha entrado al servidor.",
-            color=discord.Color.green()
+        guild = member.guild
+
+        fecha_creacion = member.created_at.strftime("%d/%m/%Y — %H:%M:%S")
+        antiguedad = (discord.utils.utcnow() - member.created_at).days
+
+        desc = (
+            f"👤 **Usuario:** {member.mention}\n"
+            f"🆔 **ID:** `{member.id}`\n\n"
+            f"📅 **Cuenta creada:** {fecha_creacion}\n"
+            f"📌 **Antigüedad:** {antiguedad} días"
         )
-        embed.set_thumbnail(url=member.avatar)
-        await self.send_log(member.guild, embed, "joins")
+
+        embed = create_log_embed("join", "Usuario Entró", desc, guild)
+        await self.send_log(guild, embed, "joins")
 
 
-    # --- SALIDAS ---
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
-        embed = discord.Embed(
-            title="🔴 Usuario salió",
-            description=f"{member.mention} ha salido del servidor.",
-            color=discord.Color.red()
+        guild = member.guild
+
+        desc = (
+            f"👤 **Usuario:** {member.mention}\n"
+            f"🆔 **ID:** `{member.id}`"
         )
-        embed.set_thumbnail(url=member.avatar)
-        await self.send_log(member.guild, embed, "leaves")
+
+        embed = create_log_embed("leave", "Usuario Salió", desc, guild)
+        await self.send_log(guild, embed, "leaves")
 
 
-    # --- BAN ---
     @commands.Cog.listener()
     async def on_member_ban(self, guild, user):
-        embed = discord.Embed(
-            title="🔨 Usuario baneado",
-            description=f"{user.mention} fue baneado.",
-            color=discord.Color.dark_red()
+        desc = (
+            f"👤 **Usuario:** {user.mention}\n"
+            f"🆔 **ID:** `{user.id}`"
         )
+
+        embed = create_log_embed("ban", "Usuario Baneado", desc, guild)
         await self.send_log(guild, embed, "bans")
 
 
-    # --- UNBAN ---
     @commands.Cog.listener()
     async def on_member_unban(self, guild, user):
-        embed = discord.Embed(
-            title="♻️ Usuario desbaneado",
-            description=f"{user.mention} fue desbaneado.",
-            color=discord.Color.green()
+        desc = (
+            f"👤 **Usuario:** {user.mention}\n"
+            f"🆔 **ID:** `{user.id}`"
         )
+
+        embed = create_log_embed("unban", "Usuario Desbaneado", desc, guild)
         await self.send_log(guild, embed, "unbans")
 
 
-    # --- MENSAJE ELIMINADO ---
+    # ============================
+    # CAMBIO DE NICK / AVATAR
+    # ============================
+
     @commands.Cog.listener()
-    async def on_message_delete(self, message):
+    async def on_member_update(self, before: discord.Member, after: discord.Member):
+
+        guild = after.guild
+
+        # Cambio de nick
+        if before.nick != after.nick:
+            desc = (
+                f"👤 **Usuario:** {after.mention}\n"
+                f"🆔 **ID:** `{after.id}`\n\n"
+                f"✏️ **Antes:** `{before.nick}`\n"
+                f"✏️ **Después:** `{after.nick}`"
+            )
+            embed = create_log_embed("nick_change", "Cambio de Nick", desc, guild)
+            await self.send_log(guild, embed, "nick_change")
+
+        # Cambio de avatar
+        if before.avatar != after.avatar:
+            desc = (
+                f"👤 **Usuario:** {after.mention}\n"
+                f"🆔 **ID:** `{after.id}`\n\n"
+                f"🖼️ **Avatar cambiado**"
+            )
+            embed = create_log_embed("avatar_change", "Cambio de Avatar", desc, guild)
+
+            if after.avatar:
+                embed.set_thumbnail(url=after.avatar.url)
+
+            await self.send_log(guild, embed, "avatar_change")
+
+
+    # ============================
+    # EVENTOS — ROLES
+    # ============================
+
+    @commands.Cog.listener()
+    async def on_member_update(self, before: discord.Member, after: discord.Member):
+
+        guild = after.guild
+
+        # ROLES AÑADIDOS
+        if len(after.roles) > len(before.roles):
+            role = next(r for r in after.roles if r not in before.roles)
+
+            desc = (
+                f"👤 **Usuario:** {after.mention}\n"
+                f"🆔 **ID:** `{after.id}`\n\n"
+                f"➕ **Rol añadido:** {role.mention}\n"
+                f"🆔 **ID del rol:** `{role.id}`"
+            )
+
+            embed = create_log_embed("role_add", "Rol Añadido", desc, guild)
+            await self.send_log(guild, embed, "roles_add")
+
+        # ROLES QUITADOS
+        elif len(after.roles) < len(before.roles):
+            role = next(r for r in before.roles if r not in after.roles)
+
+            desc = (
+                f"👤 **Usuario:** {after.mention}\n"
+                f"🆔 **ID:** `{after.id}`\n\n"
+                f"➖ **Rol quitado:** {role.mention}\n"
+                f"🆔 **ID del rol:** `{role.id}`"
+            )
+
+            embed = create_log_embed("role_remove", "Rol Quitado", desc, guild)
+            await self.send_log(guild, embed, "roles_remove")
+
+
+    # ============================
+    # EVENTOS — MENSAJES
+    # ============================
+
+    @commands.Cog.listener()
+    async def on_message_delete(self, message: discord.Message):
+
         if not message.guild or message.author.bot:
             return
 
-        embed = discord.Embed(
-            title="🗑️ Mensaje eliminado",
-            color=discord.Color.red()
+        guild = message.guild
+
+        desc = (
+            f"👤 **Autor:** {message.author.mention}\n"
+            f"🆔 **ID:** `{message.author.id}`\n\n"
+            f"💬 **Mensaje ID:** `{message.id}`\n"
+            f"📍 **Canal:** {message.channel.mention} (`{message.channel.id}`)\n\n"
+            f"📄 **Contenido:**\n{message.content or '*Vacío*'}"
         )
-        embed.add_field(name="Autor", value=message.author.mention)
-        embed.add_field(name="Canal", value=message.channel.mention)
-        embed.add_field(name="Contenido", value=message.content or "(vacío)", inline=False)
 
-        await self.send_log(message.guild, embed, "messages_delete")
+        embed = create_log_embed("msg_delete", "Mensaje Eliminado", desc, guild)
+
+        await self.send_log(guild, embed, "messages_delete")
 
 
-    # --- MENSAJE EDITADO ---
     @commands.Cog.listener()
-    async def on_message_edit(self, before, after):
+    async def on_message_edit(self, before: discord.Message, after: discord.Message):
+
         if not before.guild or before.author.bot:
             return
+
         if before.content == after.content:
             return
 
-        embed = discord.Embed(
-            title="✏️ Mensaje editado",
-            color=discord.Color.yellow()
+        guild = before.guild
+
+        desc = (
+            f"👤 **Autor:** {before.author.mention}\n"
+            f"🆔 **ID:** `{before.author.id}`\n\n"
+            f"💬 **Mensaje ID:** `{before.id}`\n"
+            f"📍 **Canal:** {before.channel.mention} (`{before.channel.id}`)\n\n"
+            f"✏️ **Antes:**\n{before.content or '*Vacío*'}\n\n"
+            f"✏️ **Después:**\n{after.content or '*Vacío*'}"
         )
-        embed.add_field(name="Autor", value=before.author.mention)
-        embed.add_field(name="Canal", value=before.channel.mention)
-        embed.add_field(name="Antes", value=before.content or "(vacío)", inline=False)
-        embed.add_field(name="Después", value=after.content or "(vacío)", inline=False)
 
-        await self.send_log(before.guild, embed, "messages_edit")
+        embed = create_log_embed("msg_edit", "Mensaje Editado", desc, guild)
+
+        await self.send_log(guild, embed, "messages_edit")
 
 
-    # --- ROLES AÑADIDOS / QUITADOS ---
+
+
+
+
+# ============================
+    # EVENTOS — CANALES
+    # ============================
+
     @commands.Cog.listener()
-    async def on_member_update(self, before, after):
-        # Rol añadido
-        if len(after.roles) > len(before.roles):
-            rol = next(r for r in after.roles if r not in before.roles)
+    async def on_guild_channel_create(self, channel: discord.abc.GuildChannel):
+        guild = channel.guild
 
-            embed = discord.Embed(
-                title="➕ Rol añadido",
-                description=f"{after.mention} recibió el rol **{rol.name}**",
-                color=discord.Color.green()
-            )
-            await self.send_log(after.guild, embed, "roles_add")
-
-        # Rol quitado
-        elif len(after.roles) < len(before.roles):
-            rol = next(r for r in before.roles if r not in after.roles)
-
-            embed = discord.Embed(
-                title="➖ Rol quitado",
-                description=f"A {after.mention} le quitaron el rol **{rol.name}**",
-                color=discord.Color.red()
-            )
-            await self.send_log(after.guild, embed, "roles_remove")
-
-
-    # --- CANAL CREADO ---
-    @commands.Cog.listener()
-    async def on_guild_channel_create(self, channel):
-        embed = discord.Embed(
-            title="📁 Canal creado",
-            description=f"Se creó el canal {channel.mention}",
-            color=discord.Color.green()
+        desc = (
+            f"📁 **Canal creado**\n\n"
+            f"📌 **Nombre:** `{channel.name}`\n"
+            f"🆔 **ID:** `{channel.id}`\n"
+            f"📂 **Categoría:** {channel.category.name if channel.category else 'Ninguna'}"
         )
-        await self.send_log(channel.guild, embed, "channels_create")
+
+        embed = create_log_embed("channel_create", "Canal Creado", desc, guild)
+        await self.send_log(guild, embed, "channels_create")
 
 
-    # --- CANAL ELIMINADO ---
     @commands.Cog.listener()
-    async def on_guild_channel_delete(self, channel):
-        embed = discord.Embed(
-            title="🗑️ Canal eliminado",
-            description=f"Se eliminó el canal **{channel.name}**",
-            color=discord.Color.red()
+    async def on_guild_channel_delete(self, channel: discord.abc.GuildChannel):
+        guild = channel.guild
+
+        desc = (
+            f"🗑️ **Canal eliminado**\n\n"
+            f"📌 **Nombre:** `{channel.name}`\n"
+            f"🆔 **ID:** `{channel.id}`"
         )
-        await self.send_log(channel.guild, embed, "channels_delete")
+
+        embed = create_log_embed("channel_delete", "Canal Eliminado", desc, guild)
+        await self.send_log(guild, embed, "channels_delete")
 
 
-    # --- CANAL RENOMBRADO ---
     @commands.Cog.listener()
     async def on_guild_channel_update(self, before, after):
+        guild = after.guild
+
+        # Renombrado
         if before.name != after.name:
-            embed = discord.Embed(
-                title="✏️ Canal renombrado",
-                description=f"**{before.name}** → **{after.name}**",
-                color=discord.Color.yellow()
+            desc = (
+                f"✏️ **Canal renombrado**\n\n"
+                f"📌 **Antes:** `{before.name}`\n"
+                f"📌 **Después:** `{after.name}`\n"
+                f"🆔 **ID:** `{after.id}`"
             )
-            await self.send_log(after.guild, embed, "channels_update")
+            embed = create_log_embed("channel_update", "Canal Renombrado", desc, guild)
+            await self.send_log(guild, embed, "channels_update")
+
+        # Cambio de categoría
+        if before.category != after.category:
+            desc = (
+                f"📂 **Cambio de categoría**\n\n"
+                f"📌 **Canal:** `{after.name}` (`{after.id}`)\n"
+                f"📁 **Antes:** {before.category.name if before.category else 'Ninguna'}\n"
+                f"📁 **Después:** {after.category.name if after.category else 'Ninguna'}"
+            )
+            embed = create_log_embed("channel_update", "Categoría Cambiada", desc, guild)
+            await self.send_log(guild, embed, "channels_update")
 
 
-    # --- BOOSTS ---
+    # ============================
+    # EVENTOS — SERVIDOR
+    # ============================
+
     @commands.Cog.listener()
-    async def on_guild_update(self, before, after):
+    async def on_guild_update(self, before: discord.Guild, after: discord.Guild):
+
+        # Boosts
         if before.premium_subscription_count != after.premium_subscription_count:
-            embed = discord.Embed(
-                title="💎 Nuevo Boost",
-                description=f"El servidor ahora tiene **{after.premium_subscription_count} boosts**",
-                color=discord.Color.magenta()
+            desc = (
+                f"💎 **Boost actualizado**\n\n"
+                f"📌 **Antes:** {before.premium_subscription_count}\n"
+                f"📌 **Después:** {after.premium_subscription_count}"
             )
+            embed = create_log_embed("boost", "Boost del Servidor", desc, after)
             await self.send_log(after, embed, "boosts")
 
+        # Nombre del servidor
+        if before.name != after.name:
+            desc = (
+                f"🏷️ **Nombre cambiado**\n\n"
+                f"📌 **Antes:** `{before.name}`\n"
+                f"📌 **Después:** `{after.name}`"
+            )
+            embed = create_log_embed("server_update", "Nombre del Servidor Cambiado", desc, after)
+            await self.send_log(after, embed, "server_update")
 
-    # --- COMANDOS USADOS ---
+        # Icono
+        if before.icon != after.icon:
+            desc = (
+                f"🖼️ **Icono cambiado**\n\n"
+                f"📌 **Servidor:** `{after.name}`"
+            )
+            embed = create_log_embed("server_update", "Icono del Servidor Cambiado", desc, after)
+            if after.icon:
+                embed.set_thumbnail(url=after.icon.url)
+            await self.send_log(after, embed, "server_update")
+
+        # Banner
+        if before.banner != after.banner:
+            desc = (
+                f"🖼️ **Banner cambiado**\n\n"
+                f"📌 **Servidor:** `{after.name}`"
+            )
+            embed = create_log_embed("server_update", "Banner del Servidor Cambiado", desc, after)
+            await self.send_log(after, embed, "server_update")
+
+
+    # ============================
+    # EVENTOS — EMOJIS
+    # ============================
+
     @commands.Cog.listener()
-    async def on_app_command_completion(self, interaction, command):
-        embed = discord.Embed(
-            title="📌 Comando usado",
-            description=f"{interaction.user.mention} usó **/{command.name}**",
-            color=discord.Color.blue()
+    async def on_guild_emojis_update(self, guild, before, after):
+
+        before_ids = {e.id: e for e in before}
+        after_ids = {e.id: e for e in after}
+
+        # Emoji añadido
+        for emoji in after:
+            if emoji.id not in before_ids:
+                desc = (
+                    f"😃 **Emoji añadido**\n\n"
+                    f"📌 **Nombre:** `{emoji.name}`\n"
+                    f"🆔 **ID:** `{emoji.id}`"
+                )
+                embed = create_log_embed("emoji_add", "Emoji Añadido", desc, guild)
+                await self.send_log(guild, embed, "emoji_add")
+
+        # Emoji eliminado
+        for emoji in before:
+            if emoji.id not in after_ids:
+                desc = (
+                    f"❌ **Emoji eliminado**\n\n"
+                    f"📌 **Nombre:** `{emoji.name}`\n"
+                    f"🆔 **ID:** `{emoji.id}`"
+                )
+                embed = create_log_embed("emoji_remove", "Emoji Eliminado", desc, guild)
+                await self.send_log(guild, embed, "emoji_remove")
+
+        # Emoji actualizado
+        for emoji in after:
+            if emoji.id in before_ids and emoji.name != before_ids[emoji.id].name:
+                desc = (
+                    f"✏️ **Emoji actualizado**\n\n"
+                    f"📌 **Antes:** `{before_ids[emoji.id].name}`\n"
+                    f"📌 **Después:** `{emoji.name}`"
+                )
+                embed = create_log_embed("emoji_update", "Emoji Actualizado", desc, guild)
+                await self.send_log(guild, embed, "emoji_update")
+
+
+    # ============================
+    # EVENTOS — INVITACIONES
+    # ============================
+
+    @commands.Cog.listener()
+    async def on_invite_create(self, invite: discord.Invite):
+        guild = invite.guild
+
+        desc = (
+            f"🔗 **Invitación creada**\n\n"
+            f"📌 **Código:** `{invite.code}`\n"
+            f"📍 **Canal:** {invite.channel.mention}\n"
+            f"👤 **Creador:** {invite.inviter.mention if invite.inviter else 'Desconocido'}"
         )
-        await self.send_log(interaction.guild, embed, "commands")
+
+        embed = create_log_embed("invite_create", "Invitación Creada", desc, guild)
+        await self.send_log(guild, embed, "invites_create")
+
+
+    @commands.Cog.listener()
+    async def on_invite_delete(self, invite: discord.Invite):
+        guild = invite.guild
+
+        desc = (
+            f"❌ **Invitación eliminada**\n\n"
+            f"📌 **Código:** `{invite.code}`\n"
+            f"📍 **Canal:** {invite.channel.mention}"
+        )
+
+        embed = create_log_embed("invite_delete", "Invitación Eliminada", desc, guild)
+        await self.send_log(guild, embed, "invites_delete")
+
+
+    # ============================
+    # EVENTOS — THREADS
+    # ============================
+
+    @commands.Cog.listener()
+    async def on_thread_create(self, thread: discord.Thread):
+        guild = thread.guild
+
+        desc = (
+            f"🧵 **Thread creado**\n\n"
+            f"📌 **Nombre:** `{thread.name}`\n"
+            f"🆔 **ID:** `{thread.id}`\n"
+            f"📍 **Canal padre:** {thread.parent.mention}"
+        )
+
+        embed = create_log_embed("thread_create", "Thread Creado", desc, guild)
+        await self.send_log(guild, embed, "threads_create")
+
+
+    @commands.Cog.listener()
+    async def on_thread_update(self, before: discord.Thread, after: discord.Thread):
+        guild = after.guild
+
+        if before.archived != after.archived:
+            estado = "Archivado" if after.archived else "Desarchivado"
+
+            desc = (
+                f"📌 **Thread:** `{after.name}` (`{after.id}`)\n"
+                f"📁 **Estado:** {estado}"
+            )
+
+            embed = create_log_embed("thread_update", "Thread Actualizado", desc, guild)
+            await self.send_log(guild, embed, "threads_update")
+
+
+
+# ============================
+    # EVENTOS — COMANDOS USADOS
+    # ============================
+
+    @commands.Cog.listener()
+    async def on_app_command_completion(self, interaction: discord.Interaction, command):
+        guild = interaction.guild
+        if not guild:
+            return
+
+        desc = (
+            f"📌 **Comando usado:** `/{command.name}`\n\n"
+            f"👤 **Usuario:** {interaction.user.mention}\n"
+            f"🆔 **ID:** `{interaction.user.id}`\n"
+            f"📍 **Canal:** {interaction.channel.mention} (`{interaction.channel.id}`)"
+        )
+
+        embed = create_log_embed("command", "Comando Usado", desc, guild)
+        await self.send_log(guild, embed, "commands")
 
 
 # ============================
@@ -692,4 +935,4 @@ class LogsCog(commands.Cog):
 # ============================
 
 async def setup(bot):
-    await bot.add_cog(LogsCog(bot))
+    await bot.add_cog(UltraLogs(bot)) 
