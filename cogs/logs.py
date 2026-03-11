@@ -879,7 +879,7 @@ class UltraLogs(commands.Cog):
             f"🧵 **Thread creado**\n\n"
             f"📌 **Nombre:** `{thread.name}`\n"
             f"🆔 **ID:** `{thread.id}`\n"
-            f"📍 **Canal padre:** {thread.parent.mention}"
+            f"📍 **Canal en el que se creo:** {thread.parent.mention}"
         )
 
         embed = create_log_embed("thread_create", "Thread Creado", desc, guild)
