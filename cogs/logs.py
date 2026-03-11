@@ -23,12 +23,10 @@ def load_logs():
         with open(LOGS_FILE, "r") as f:
             data = json.load(f)
     except:
-        # JSON corrupto → lo regeneramos
         with open(LOGS_FILE, "w") as f:
             json.dump({}, f, indent=4)
         return {}
 
-    # Autocorrección por si algo está mal
     for guild_id, cfg in list(data.items()):
         if not isinstance(cfg, dict):
             data[guild_id] = {}
@@ -158,10 +156,13 @@ class UltraLogs(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.logs = load_logs()
-        self.user_pages = {}
+
+        # 🔥 YA NO SE MEZCLA CON ANTI-LINKS
+        self.ulog_pages = {}   # antes era user_pages
+
 
     # ============================
-    # Enviar log (usado por TODOS los eventos)
+    # Enviar log
     # ============================
 
     async def send_log(self, guild: discord.Guild, embed: discord.Embed, event_key: str):
@@ -189,12 +190,10 @@ class UltraLogs(commands.Cog):
         try:
             await channel.send(embed=embed)
         except:
-            pass 
+            pass
 
 
-
-
-# ============================
+    # ============================
     # EMBEDS DEL PANEL
     # ============================
 
@@ -302,7 +301,7 @@ class UltraLogs(commands.Cog):
             min_values=0,
             max_values=len(options),
             options=options,
-            custom_id=f"events_page_{page}"
+            custom_id=f"ulog_events_page_{page}"   # 🔥 ID único
         )
 
 
@@ -316,13 +315,13 @@ class UltraLogs(commands.Cog):
         btn_toggle = discord.ui.Button(
             label="🟢 Activar Logs" if not enabled else "🔴 Desactivar Logs",
             style=discord.ButtonStyle.green if not enabled else discord.ButtonStyle.red,
-            custom_id="toggle_logs"
+            custom_id="ulog_toggle"   # 🔥 ID único
         )
 
         btn_save = discord.ui.Button(
             label="💾 Guardar",
             style=discord.ButtonStyle.blurple,
-            custom_id="save_logs"
+            custom_id="ulog_save"     # 🔥 ID único
         )
 
         return btn_toggle, btn_save
@@ -339,14 +338,14 @@ class UltraLogs(commands.Cog):
             buttons.append(discord.ui.Button(
                 label="⬅️ Anterior",
                 style=discord.ButtonStyle.secondary,
-                custom_id="prev_page"
+                custom_id="ulog_prev_page"   # 🔥 ID único
             ))
 
         if page < 6:
             buttons.append(discord.ui.Button(
                 label="➡️ Siguiente",
                 style=discord.ButtonStyle.secondary,
-                custom_id="next_page"
+                custom_id="ulog_next_page"   # 🔥 ID único
             ))
 
         return buttons
@@ -362,29 +361,25 @@ class UltraLogs(commands.Cog):
         embed = self.panel_embed(page)
         view = discord.ui.View(timeout=300)
 
-        # Página 1 → selección de canal
         if page == 1:
             channel_select = discord.ui.ChannelSelect(
                 placeholder="Selecciona el canal de logs",
                 channel_types=[discord.ChannelType.text],
-                custom_id="select_log_channel"
+                custom_id="ulog_select_channel"   # 🔥 ID único
             )
             view.add_item(channel_select)
 
-        # Páginas 2–6 → selección de eventos
         else:
             view.add_item(self.build_event_select(guild_id, page))
 
-        # Botones principales
         btn_toggle, btn_save = self.main_buttons(guild_id)
         view.add_item(btn_toggle)
         view.add_item(btn_save)
 
-        # Navegación
         for btn in self.nav_buttons(page):
             view.add_item(btn)
 
-        self.user_pages[interaction.user.id] = page
+        self.ulog_pages[interaction.user.id] = page
 
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
@@ -398,7 +393,6 @@ class UltraLogs(commands.Cog):
     async def logs_cmd(self, interaction: discord.Interaction):
         guild_id = str(interaction.guild.id)
 
-        # Crear config si no existe
         if guild_id not in self.logs:
             self.logs[guild_id] = {
                 "enabled": False,
@@ -407,10 +401,12 @@ class UltraLogs(commands.Cog):
             }
             save_logs(self.logs)
 
-        await self.open_panel(interaction, page=1)
+        await self.open_panel(interaction, page=1) 
 
 
-    # ============================
+
+        
+# ============================
     # LISTENER DE COMPONENTES
     # ============================
 
@@ -423,31 +419,32 @@ class UltraLogs(commands.Cog):
         custom = interaction.data.get("custom_id")
         user_id = interaction.user.id
 
-        if user_id not in self.user_pages:
+        # 🔥 Solo responder si pertenece al panel de logs
+        if user_id not in self.ulog_pages:
             return
 
-        page = self.user_pages[user_id]
+        page = self.ulog_pages[user_id]
         guild_id = str(interaction.guild.id)
 
         # Navegación
-        if custom == "next_page":
+        if custom == "ulog_next_page":
             page = min(6, page + 1)
-            self.user_pages[user_id] = page
+            self.ulog_pages[user_id] = page
             return await self.update_panel(interaction, page)
 
-        if custom == "prev_page":
+        if custom == "ulog_prev_page":
             page = max(1, page - 1)
-            self.user_pages[user_id] = page
+            self.ulog_pages[user_id] = page
             return await self.update_panel(interaction, page)
 
         # Activar / desactivar logs
-        if custom == "toggle_logs":
+        if custom == "ulog_toggle":
             self.logs[guild_id]["enabled"] = not self.logs[guild_id]["enabled"]
             save_logs(self.logs)
             return await self.update_panel(interaction, page)
 
         # Guardar
-        if custom == "save_logs":
+        if custom == "ulog_save":
             save_logs(self.logs)
             return await interaction.response.send_message(
                 "💾 Configuración guardada.",
@@ -455,14 +452,14 @@ class UltraLogs(commands.Cog):
             )
 
         # Selección de canal
-        if custom == "select_log_channel":
+        if custom == "ulog_select_channel":
             channel_id = int(interaction.data["values"][0])
             self.logs[guild_id]["channel"] = channel_id
             save_logs(self.logs)
             return await self.update_panel(interaction, page)
 
         # Selección de eventos
-        if custom.startswith("events_page_"):
+        if custom.startswith("ulog_events_page_"):
             selected = interaction.data.get("values", [])
             all_events = [key for key, _ in self.event_options(page)]
 
@@ -487,7 +484,7 @@ class UltraLogs(commands.Cog):
             channel_select = discord.ui.ChannelSelect(
                 placeholder="Selecciona el canal de logs",
                 channel_types=[discord.ChannelType.text],
-                custom_id="select_log_channel"
+                custom_id="ulog_select_channel"
             )
             view.add_item(channel_select)
         else:
@@ -503,8 +500,7 @@ class UltraLogs(commands.Cog):
         await interaction.response.edit_message(embed=embed, view=view)
 
 
-
-# ============================
+    # ============================
     # EVENTOS — USUARIOS
     # ============================
 
@@ -634,7 +630,9 @@ class UltraLogs(commands.Cog):
             await self.send_log(guild, embed, "roles_remove")
 
 
-    # ============================
+
+
+# ============================
     # EVENTOS — MENSAJES
     # ============================
 
@@ -684,11 +682,7 @@ class UltraLogs(commands.Cog):
         await self.send_log(guild, embed, "messages_edit")
 
 
-
-
-
-
-# ============================
+    # ============================
     # EVENTOS — CANALES
     # ============================
 
@@ -908,31 +902,44 @@ class UltraLogs(commands.Cog):
             await self.send_log(guild, embed, "threads_update")
 
 
-
-# ============================
+    # ============================
     # EVENTOS — COMANDOS USADOS
     # ============================
 
     @commands.Cog.listener()
     async def on_app_command_completion(self, interaction: discord.Interaction, command):
+
         guild = interaction.guild
         if not guild:
             return
+
+        fecha, hora = format_timestamp()
 
         desc = (
             f"📌 **Comando usado:** `/{command.name}`\n\n"
             f"👤 **Usuario:** {interaction.user.mention}\n"
             f"🆔 **ID:** `{interaction.user.id}`\n"
-            f"📍 **Canal:** {interaction.channel.mention} (`{interaction.channel.id}`)"
+            f"📍 **Canal:** {interaction.channel.mention} (`{interaction.channel.id}`)\n\n"
+            f"📅 **Fecha**\n{fecha}\n\n"
+            f"🕒 **Hora**\n{hora}\n\n"
+            f"🏠 **Servidor**\n{guild.name}\n"
+            f"ID: `{guild.id}`"
         )
 
-        embed = create_log_embed("command", "Comando Usado", desc, guild)
-        await self.send_log(guild, embed, "commands")
+        embed = discord.Embed(
+            title="📌 Comando Usado",
+            description=desc,
+            color=discord.Color.blue()
+        )
 
+        if guild.icon:
+            embed.set_thumbnail(url=guild.icon.url)
+
+        await self.send_log(guild, embed, "commands")
 
 # ============================
 # SETUP DEL COG
 # ============================
 
 async def setup(bot):
-    await bot.add_cog(UltraLogs(bot)) 
+    await bot.add_cog(UltraLogs(bot))
