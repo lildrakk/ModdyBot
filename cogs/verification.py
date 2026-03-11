@@ -14,16 +14,28 @@ VERIFICATION_FILE = "verification.json"
 # JSON
 # ============================
 
-def load_verification():
-    if not os.path.exists(VERIFICATION_FILE):
-        with open(VERIFICATION_FILE, "w") as f:
-            json.dump({}, f, indent=4)
-    with open(VERIFICATION_FILE, "r") as f:
-        return json.load(f)
-
 def save_verification(data):
     with open(VERIFICATION_FILE, "w") as f:
         json.dump(data, f, indent=4)
+
+def load_verification():
+    if not os.path.exists(VERIFICATION_FILE):
+        save_verification({})
+        return {}
+
+    try:
+        with open(VERIFICATION_FILE, "r") as f:
+            data = json.load(f)
+            if not isinstance(data, dict):
+                save_verification({})
+                return {}
+            return data
+    except:
+        save_verification({})
+        return {}
+
+def sanitize_panel_id(panel_id: str) -> str:
+    return panel_id.strip().replace(" ", "_")
 
 # ============================
 # CAPTCHA LIMPIO
@@ -96,6 +108,7 @@ class VerificationCog(commands.Cog):
         for guild_id in data:
             for panel_id, cfg in data[guild_id].items():
                 label = cfg.get("boton", "Verificar")
+                # Registrar las views persistentes al arrancar
                 bot.add_view(VerifyButton(panel_id, label))
 
     # ============================
@@ -145,6 +158,8 @@ class VerificationCog(commands.Cog):
 
         if guild_id not in data:
             data[guild_id] = {}
+
+        panel_id = sanitize_panel_id(panel_id)
 
         data[guild_id][panel_id] = {
             "rol_dar": rol_dar.id if rol_dar else None,
@@ -196,6 +211,8 @@ class VerificationCog(commands.Cog):
         guild_id = str(interaction.guild.id)
         data = load_verification()
 
+        panel_id = sanitize_panel_id(panel_id)
+
         if guild_id not in data or panel_id not in data[guild_id]:
             return await interaction.response.send_message("❌ Ese panel no existe.", ephemeral=True)
 
@@ -234,6 +251,11 @@ class VerificationCog(commands.Cog):
             return
 
         panel_id = custom.split("_", 1)[1]
+        panel_id = sanitize_panel_id(panel_id)
+
+        if not interaction.guild:
+            return
+
         guild_id = str(interaction.guild.id)
 
         data = load_verification()
@@ -243,10 +265,10 @@ class VerificationCog(commands.Cog):
 
         cfg = data[guild_id][panel_id]
 
-        rol_dar = interaction.guild.get_role(cfg["rol_dar"])
-        rol_quitar = interaction.guild.get_role(cfg["rol_quitar"])
-        tipo = cfg["tipo"]
-        canal_logs = interaction.guild.get_channel(cfg["canal_logs"])
+        rol_dar = interaction.guild.get_role(cfg["rol_dar"]) if cfg.get("rol_dar") else None
+        rol_quitar = interaction.guild.get_role(cfg["rol_quitar"]) if cfg.get("rol_quitar") else None
+        tipo = cfg.get("tipo", "normal")
+        canal_logs = interaction.guild.get_channel(cfg.get("canal_logs")) if cfg.get("canal_logs") else None
 
         # Ya verificado
         if rol_dar and rol_dar in interaction.user.roles:
@@ -286,7 +308,7 @@ class VerificationCog(commands.Cog):
 
         embed = discord.Embed(
             title="🔐 Verificación con Captcha",
-            description=cfg["captcha_texto"],
+            description=cfg.get("captcha_texto", "Verifícate por seguridad del servidor"),
             color=discord.Color.blue()
         )
 
@@ -331,20 +353,21 @@ class VerificationCog(commands.Cog):
 
                                 await modal_interaction.response.send_message("✅ Verificación completada.", ephemeral=True)
 
-                                await self_cog.enviar_log_verificacion(
-                                    modal_interaction.user,
-                                    modal_interaction.guild,
-                                    canal_logs,
-                                    rol_dado=rol_dar,
-                                    rol_quitado=rol_quitar
-                                )
+                                self_cog = modal_interaction.client.get_cog("VerificationCog")
+                                if self_cog:
+                                    await self_cog.enviar_log_verificacion(
+                                        modal_interaction.user,
+                                        modal_interaction.guild,
+                                        canal_logs,
+                                        rol_dado=rol_dar,
+                                        rol_quitado=rol_quitar
+                                    )
 
                             except:
                                 await modal_interaction.response.send_message("❌ No pude asignar los roles.", ephemeral=True)
                         else:
                             await modal_interaction.response.send_message("❌ Código incorrecto.", ephemeral=True)
 
-                self_cog = interaction.client.get_cog("VerificationCog")
                 await btn_interaction.response.send_modal(CaptchaModal())
 
             responder_btn.callback = responder_callback
@@ -411,4 +434,4 @@ class VerificationCog(commands.Cog):
 # ============================
 
 async def setup(bot):
-    await bot.add_cog(VerificationCog(bot))
+    await bot.add_cog(VerificationCog(bot)) 
