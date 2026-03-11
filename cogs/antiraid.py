@@ -36,9 +36,32 @@ def save_all_config(data):
 class AntiRaid(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-
-        # Cargamos TODA la config una sola vez (persistente)
         self.config = load_all_config()
+
+    # ============================================================
+    # COMANDO PRINCIPAL /antiraid
+    # ============================================================
+
+    @app_commands.command(
+        name="antiraid",
+        description="Abre el panel de configuración Anti‑Raid"
+    )
+    async def antiraid_cmd(self, interaction: discord.Interaction):
+
+        guild = interaction.guild
+        if not guild:
+            return await interaction.response.send_message(
+                "❌ Este comando solo puede usarse en servidores.",
+                ephemeral=True
+            )
+
+        self.ensure_guild_config(guild.id)
+
+        await interaction.response.send_message(
+            "🛡 **Panel Anti‑Raid**",
+            view=AntiRaid.Panel(self, guild),
+            ephemeral=True
+        )
 
     # ============================================================
     # CONFIG POR SERVIDOR (PERSISTENTE)
@@ -80,7 +103,6 @@ class AntiRaid(commands.Cog):
         return self.config[gid]
 
     def update_guild(self, guild_id: int, new_data: dict):
-        """Actualiza SOLO la config del servidor sin borrar otras."""
         self.config[str(guild_id)] = new_data
         save_all_config(self.config)
 
@@ -121,16 +143,13 @@ class AntiRaid(commands.Cog):
         cfg["join_times"].append(now)
         cfg["join_times"] = [t for t in cfg["join_times"] if now - t <= cfg["settings"]["join_window"]]
 
-        # Cuenta nueva
         age = (datetime.now(timezone.utc) - member.created_at).days
         if age < cfg["settings"]["min_account_days"]:
             self.add_risk(member.guild.id, member.id, 25, f"Cuenta nueva ({age} días)")
 
-        # Nombre sospechoso
         if any(x in member.name.lower() for x in ["bot", "raid", "spam", "xxx", "123"]):
             self.add_risk(member.guild.id, member.id, 15, "Nombre sospechoso")
 
-        # Entradas masivas
         if len(cfg["join_times"]) >= cfg["settings"]["join_limit"]:
             self.add_risk(member.guild.id, member.id, 40, "Entradas masivas detectadas")
 
@@ -159,7 +178,7 @@ class AntiRaid(commands.Cog):
             cfg["user_risk"][uid] = {"risk": 0, "reasons": [], "messages": []}
 
         cfg["user_risk"][uid]["messages"].append(now)
-        cfg["user_risk"][uid]["messages"] = [
+        cfg["user_r_risk"][uid]["messages"] = [
             t for t in cfg["user_risk"][uid]["messages"]
             if now - t <= cfg["settings"]["spam_window"]
         ]
@@ -206,7 +225,8 @@ class AntiRaid(commands.Cog):
         self.update_guild(channel.guild.id, cfg)
 
         await self.auto_lockdown_check(channel.guild)
-        await self.punish_high_risk_users(channel.guild)
+        await self.punish_high_risk_users(channel.guild) 
+
 
 
 
@@ -294,8 +314,6 @@ class AntiRaid(commands.Cog):
 
             reason = " | ".join(data["reasons"])
 
-            await self.add_to_blacklist(guild, user, reason)
-
             try:
                 await user.send(
                     embed=discord.Embed(
@@ -309,9 +327,8 @@ class AntiRaid(commands.Cog):
 
             try:
                 await guild.ban(user, reason=f"Anti-Raid: {reason}")
-                await self.log_action(guild, user, "Ban automático", reason)
             except:
-                await self.log_action(guild, user, "Ban fallido", reason)
+                pass
 
             to_reset.append(uid)
 
@@ -320,34 +337,6 @@ class AntiRaid(commands.Cog):
             cfg["user_risk"][uid]["reasons"] = []
 
         self.update_guild(guild.id, cfg)
-
-    # ============================================================
-    # RESET / PURGA
-    # ============================================================
-
-    def reset_global_risk(self, guild_id: int):
-        cfg = self.ensure_guild_config(guild_id)
-        for uid in cfg["user_risk"]:
-            cfg["user_risk"][uid]["risk"] = 0
-            cfg["user_risk"][uid]["reasons"] = []
-        self.update_guild(guild_id, cfg)
-
-    def purge_suspicious(self, guild_id: int):
-        cfg = self.ensure_guild_config(guild_id)
-        to_delete = [uid for uid, data in cfg["user_risk"].items() if data["risk"] < 30]
-        for uid in to_delete:
-            del cfg["user_risk"][uid]
-        self.update_guild(guild_id, cfg)
-
-    def purge_antiraid(self, guild_id: int):
-        cfg = self.ensure_guild_config(guild_id)
-        cfg["join_times"] = []
-        cfg["user_risk"] = {}
-        cfg["channel_deletions"] = []
-        cfg["channel_creations"] = []
-        cfg["lockdown_active"] = False
-        cfg["lockdown_state"] = {}
-        self.update_guild(guild_id, cfg)
 
     # ============================================================
     # SELECT MENU PARA LOGS
@@ -532,4 +521,3 @@ class AntiRaid(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(AntiRaid(bot))
-
