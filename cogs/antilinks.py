@@ -572,7 +572,9 @@ class AntiLinksCog(commands.Cog):
         else:
             await interaction.edit_original_response(embed=embed, view=view)
 
-    # ============================
+
+
+# ============================
     # MANEJADOR DE INTERACCIONES
     # ============================
 
@@ -661,10 +663,7 @@ class AntiLinksCog(commands.Cog):
 
         if custom == "select_log_channel":
             values = interaction.data.get("values", [])
-            if values:
-                cfg["log_channel"] = int(values[0])
-            else:
-                cfg["log_channel"] = 0
+            cfg["log_channel"] = int(values[0]) if values else 0
             save_antilinks(self.config)
             return await self.build_panel(interaction, self.user_pages.get(user_id, 1))
 
@@ -693,15 +692,14 @@ class AntiLinksCog(commands.Cog):
             )
 
         if custom == "add_domain":
-            return await interaction.response.send_modal(AddDomainModal(self, guild_id)) 
+            return await interaction.response.send_modal(AddDomainModal(self, guild_id))
 
-        
 
-# ============================
-    # SISTEMA DE WARNS
+    # ============================
+    # SISTEMA DE WARNS (ASYNC)
     # ============================
 
-    def register_warn(self, guild_id: str, user_id: int):
+    async def register_warn(self, guild_id: str, user_id: int):
         cfg = self.ensure_guild_config(guild_id)
 
         now = int(time.time())
@@ -725,15 +723,17 @@ class AntiLinksCog(commands.Cog):
 
         # ¿Supera el límite?
         if warn_count >= limit and cfg["auto_punish_enabled"]:
-            return warn_count, self.apply_punishment(guild_id, user_id)
+            action = await self.apply_punishment(guild_id, user_id)
+            return warn_count, action
         else:
             return warn_count, "Warn"
 
+
     # ============================
-    # APLICAR SANCIÓN
+    # APLICAR SANCIÓN (ASYNC)
     # ============================
 
-    def apply_punishment(self, guild_id: str, user_id: int):
+    async def apply_punishment(self, guild_id: str, user_id: int):
         cfg = self.ensure_guild_config(guild_id)
         action = cfg.get("auto_punish_action", "mute")
 
@@ -778,6 +778,8 @@ class AntiLinksCog(commands.Cog):
 
         # SIN SANCIÓN
         return "Warn"
+
+
 
     # ============================
     # ENVIAR LOGS
