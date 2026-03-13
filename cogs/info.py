@@ -132,22 +132,31 @@ class Info(commands.Cog):
                 ephemeral=True
             )
 
+        guilds = self.bot.guilds
+        total = len(guilds)
+
+        # Calcular páginas de 25
+        pages = (total // 25) + (1 if total % 25 != 0 else 0)
+
         options = [
-            discord.SelectOption(label=guild.name, value=str(guild.id))
-            for guild in self.bot.guilds
+            discord.SelectOption(
+                label=f"Página {i+1}",
+                value=str(i)
+            )
+            for i in range(pages)
         ]
 
         select = discord.ui.Select(
-            placeholder="Selecciona un servidor",
+            placeholder="Selecciona una página de servidores",
             options=options,
-            custom_id="owner_select_server"
+            custom_id="select_server_page"
         )
 
         view = discord.ui.View()
         view.add_item(select)
 
         await interaction.response.send_message(
-            "Selecciona un servidor del menú:",
+            "Selecciona una página:",
             view=view,
             ephemeral=True
         )
@@ -163,74 +172,111 @@ class Info(commands.Cog):
             if interaction.type != discord.InteractionType.component:
                 return
 
-            if interaction.data.get("custom_id") != "owner_select_server":
-                return
-
             OWNER_ID = 1394342273919225959
 
             if interaction.user.id != OWNER_ID:
+                return
+
+            # ============================
+            # PRIMER SELECT: PÁGINA
+            # ============================
+
+            if interaction.data.get("custom_id") == "select_server_page":
+
+                page = int(interaction.data["values"][0])
+                guilds = self.bot.guilds
+
+                start = page * 25
+                end = start + 25
+
+                slice_guilds = guilds[start:end]
+
+                options = [
+                    discord.SelectOption(
+                        label=g.name,
+                        value=str(g.id)
+                    )
+                    for g in slice_guilds
+                ]
+
+                select = discord.ui.Select(
+                    placeholder="Selecciona un servidor",
+                    options=options,
+                    custom_id="select_server_final"
+                )
+
+                view = discord.ui.View()
+                view.add_item(select)
+
                 return await interaction.response.send_message(
-                    "❌ No tienes permiso para usar esto.",
+                    f"Página {page+1}: selecciona un servidor:",
+                    view=view,
                     ephemeral=True
                 )
 
-            guild_id = int(interaction.data["values"][0])
-            guild = self.bot.get_guild(guild_id)
+            # ============================
+            # SEGUNDO SELECT: SERVIDOR
+            # ============================
 
-            if not guild:
-                return await interaction.response.send_message(
-                    "❌ No se pudo obtener el servidor.",
-                    ephemeral=True
+            if interaction.data.get("custom_id") == "select_server_final":
+
+                guild_id = int(interaction.data["values"][0])
+                guild = self.bot.get_guild(guild_id)
+
+                if not guild:
+                    return await interaction.response.send_message(
+                        "❌ No se pudo obtener el servidor.",
+                        ephemeral=True
+                    )
+
+                # Invitación
+                invite_url = "No disponible"
+                try:
+                    invites = await guild.invites()
+                    if invites:
+                        invite_url = invites[0].url
+                    else:
+                        for c in guild.text_channels:
+                            if c.permissions_for(guild.me).create_instant_invite:
+                                invite = await c.create_invite(max_age=0, max_uses=0)
+                                invite_url = invite.url
+                                break
+                except:
+                    pass
+
+                total = guild.member_count
+                bots = len([m for m in guild.members if m.bot])
+                humans = total - bots
+
+                fecha = guild.created_at.strftime("%d/%m/%Y %H:%M:%S")
+
+                total_channels = len(guild.text_channels) + len(guild.voice_channels) + len(guild.categories)
+
+                embed = discord.Embed(
+                    title=f"📊 Información del servidor: {guild.name}",
+                    color=discord.Color.blurple()
                 )
 
-            # Invitación
-            invite_url = "No disponible"
-            try:
-                invites = await guild.invites()
-                if invites:
-                    invite_url = invites[0].url
-                else:
-                    for c in guild.text_channels:
-                        if c.permissions_for(guild.me).create_instant_invite:
-                            invite = await c.create_invite(max_age=0, max_uses=0)
-                            invite_url = invite.url
-                            break
-            except:
-                pass
+                embed.add_field(name="🆔 ID", value=f"`{guild.id}`", inline=False)
+                embed.add_field(name="👑 Dueño", value=f"{guild.owner.mention} (`{guild.owner_id}`)", inline=False)
+                embed.add_field(
+                    name="👥 Miembros",
+                    value=f"Total: **{total}**\nHumanos: **{humans}**\nBots: **{bots}**",
+                    inline=False
+                )
+                embed.add_field(name="📅 Creado el", value=fecha, inline=False)
+                embed.add_field(name="📌 Roles", value=str(len(guild.roles)), inline=True)
+                embed.add_field(name="📁 Canales", value=str(total_channels), inline=True)
+                embed.add_field(name="💎 Boosts", value=str(guild.premium_subscription_count), inline=True)
+                embed.add_field(name="🔗 Invitación", value=invite_url, inline=False)
 
-            total = guild.member_count
-            bots = len([m for m in guild.members if m.bot])
-            humans = total - bots
+                if guild.icon:
+                    embed.set_thumbnail(url=guild.icon.url)
 
-            fecha = guild.created_at.strftime("%d/%m/%Y %H:%M:%S")
+                if guild.banner:
+                    embed.set_image(url=guild.banner.url)
 
-            total_channels = len(guild.text_channels) + len(guild.voice_channels) + len(guild.categories)
-
-            embed = discord.Embed(
-                title=f"📊 Información del servidor: {guild.name}",
-                color=discord.Color.blurple()
-            )
-
-            embed.add_field(name="🆔 ID", value=f"`{guild.id}`", inline=False)
-            embed.add_add_field(name="👑 Dueño", value=f"{guild.owner.mention} (`{guild.owner_id}`)", inline=False)
-            embed.add_field(
-                name="👥 Miembros",
-                value=f"Total: **{total}**\nHumanos: **{humans}**\nBots: **{bots}**",
-                inline=False
-            )
-            embed.add_field(name="📅 Creado el", value=fecha, inline=False)
-            embed.add_field(name="📌 Roles", value=str(len(guild.roles)), inline=True)
-            embed.add_field(name="📁 Canales", value=str(total_channels), inline=True)
-            embed.add_field(name="💎 Boosts", value=str(guild.premium_subscription_count), inline=True)
-            embed.add_field(name="🔗 Invitación", value=invite_url, inline=False)
-
-            if guild.icon:
-                embed.set_thumbnail(url=guild.icon.url)
-
-            if guild.banner:
-                embed.set_image(url=guild.banner.url)
-
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+                return await interaction.response.send_message(embed=embed, ephemeral=True)
 
         except Exception as e:
             try:
@@ -241,4 +287,4 @@ class Info(commands.Cog):
 
 async def setup(bot):
     bot.launch_time = datetime.datetime.utcnow()
-    await bot.add_cog(Info(bot)) 
+    await bot.add_cog(Info(bot))
