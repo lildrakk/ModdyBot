@@ -157,11 +157,14 @@ class Info(commands.Cog):
     # ============================
 
     @commands.Cog.listener()
-    async def on_interaction(self, interaction: discord.Interaction):
+async def on_interaction(self, interaction: discord.Interaction):
 
+    try:
+        # Solo procesar selects
         if interaction.type != discord.InteractionType.component:
             return
 
+        # Solo procesar TU select
         if interaction.data.get("custom_id") != "owner_select_server":
             return
 
@@ -182,7 +185,10 @@ class Info(commands.Cog):
                 ephemeral=True
             )
 
-        # Invitación
+        # ============================
+        # INVITACIÓN
+        # ============================
+
         invite_url = "No disponible"
         try:
             invites = await guild.invites()
@@ -228,6 +234,16 @@ class Info(commands.Cog):
             embed.set_image(url=guild.banner.url)
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    except Exception as e:
+        # Evita que Discord marque la interacción como fallida
+        try:
+            await interaction.response.send_message(
+                f"❌ Error interno: {e}",
+                ephemeral=True
+            )
+        except:
+            pass
 
 
 async def setup(bot):
