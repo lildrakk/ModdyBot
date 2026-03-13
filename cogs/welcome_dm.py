@@ -89,7 +89,7 @@ class WelcomeDMCog(commands.Cog):
     name="dmprueba",
     description="Prueba el mensaje de bienvenida por DM."
 )
-async def dmprueba(self, interaction: discord.Interaction):
+    async def dmprueba(self, interaction: discord.Interaction):
 
     guild = interaction.guild
     user = interaction.user
