@@ -5,11 +5,10 @@ import json, os, time
 from datetime import datetime, timezone
 
 CONFIG_FILE = "antiraid_config.json"
-BLACKLIST_FILE = "antiraid_blacklist.json"
 
 
 # ============================================================
-# CONFIG GLOBAL (CARGA UNA VEZ)
+# CONFIG GLOBAL
 # ============================================================
 
 def load_all_config():
@@ -38,34 +37,9 @@ class AntiRaid(commands.Cog):
         self.bot = bot
         self.config = load_all_config()
 
-    # ============================================================
-    # COMANDO PRINCIPAL /antiraid
-    # ============================================================
-
-    @app_commands.command(
-        name="antiraid",
-        description="Abre el panel de configuración Anti‑Raid"
-    )
-    async def antiraid_cmd(self, interaction: discord.Interaction):
-
-        guild = interaction.guild
-        if not guild:
-            return await interaction.response.send_message(
-                "❌ Este comando solo puede usarse en servidores.",
-                ephemeral=True
-            )
-
-        self.ensure_guild_config(guild.id)
-
-        await interaction.response.send_message(
-            "🛡 **Panel Anti‑Raid**",
-            view=AntiRaid.Panel(self, guild),
-            ephemeral=True
-        )
-
-    # ============================================================
-    # CONFIG POR SERVIDOR (PERSISTENTE)
-    # ============================================================
+    # ========================================================
+    # CONFIG POR SERVIDOR
+    # ========================================================
 
     def ensure_guild_config(self, guild_id: int):
         gid = str(guild_id)
@@ -75,29 +49,32 @@ class AntiRaid(commands.Cog):
                 "enabled": True,
                 "log_channel": None,
 
-                # Datos dinámicos
                 "join_times": [],
                 "user_risk": {},
                 "channel_deletions": [],
                 "channel_creations": [],
 
-                # Ajustes
                 "settings": {
-                    "sensitivity": "medium",
+                    "sensitivity": "normal",
                     "join_limit": 5,
                     "join_window": 10,
                     "min_account_days": 7,
-                    "spam_window": 5,
-                    "spam_messages": 4,
                     "channel_delete_limit": 3,
                     "channel_create_limit": 3
                 },
 
-                # Lockdown
-                "lockdown_active": False,
-                "lockdown_state": {}
+                "modules": {
+                    "bots": True,
+                    "joins": True,
+                    "accounts": True,
+                    "roles": True,
+                    "channels": True,
+                    "autoban": True,
+                    "lockdown": True,
+                    "logs": True,
+                    "reputation": True
+                }
             }
-
             save_all_config(self.config)
 
         return self.config[gid]
@@ -106,19 +83,27 @@ class AntiRaid(commands.Cog):
         self.config[str(guild_id)] = new_data
         save_all_config(self.config)
 
-    # ============================================================
+    # ========================================================
     # SISTEMA DE RIESGO
-    # ============================================================
+    # ========================================================
 
     def add_risk(self, guild_id: int, user_id: int, amount: int, reason: str):
         cfg = self.ensure_guild_config(guild_id)
         uid = str(user_id)
 
         if uid not in cfg["user_risk"]:
-            cfg["user_risk"][uid] = {"risk": 0, "reasons": [], "messages": []}
+            cfg["user_risk"][uid] = {
+                "risk": 0,
+                "reasons": [],
+                "messages": [],
+                "history": []
+            }
 
         cfg["user_risk"][uid]["risk"] += amount
         cfg["user_risk"][uid]["reasons"].append(reason)
+        cfg["user_risk"][uid]["history"].append(
+            {"time": int(time.time()), "reason": reason, "amount": amount}
+        )
 
         if cfg["user_risk"][uid]["risk"] > 100:
             cfg["user_risk"][uid]["risk"] = 100
@@ -129,127 +114,56 @@ class AntiRaid(commands.Cog):
         cfg = self.ensure_guild_config(guild_id)
         return sum(data["risk"] for data in cfg["user_risk"].values())
 
-    # ============================================================
-    # DETECCIÓN: ENTRADAS
-    # ============================================================
+    # ========================================================
+    # LOGS
+    # ========================================================
 
-    @commands.Cog.listener()
-    async def on_member_join(self, member):
-        cfg = self.ensure_guild_config(member.guild.id)
-        if not cfg["enabled"]:
-            return
-
-        now = time.time()
-        cfg["join_times"].append(now)
-        cfg["join_times"] = [t for t in cfg["join_times"] if now - t <= cfg["settings"]["join_window"]]
-
-        age = (datetime.now(timezone.utc) - member.created_at).days
-        if age < cfg["settings"]["min_account_days"]:
-            self.add_risk(member.guild.id, member.id, 25, f"Cuenta nueva ({age} días)")
-
-        if any(x in member.name.lower() for x in ["bot", "raid", "spam", "xxx", "123"]):
-            self.add_risk(member.guild.id, member.id, 15, "Nombre sospechoso")
-
-        if len(cfg["join_times"]) >= cfg["settings"]["join_limit"]:
-            self.add_risk(member.guild.id, member.id, 40, "Entradas masivas detectadas")
-
-        self.update_guild(member.guild.id, cfg)
-
-        await self.auto_lockdown_check(member.guild)
-        await self.punish_high_risk_users(member.guild)
-
-    # ============================================================
-    # DETECCIÓN: MENSAJES
-    # ============================================================
-
-    @commands.Cog.listener()
-    async def on_message(self, message):
-        if message.author.bot or not message.guild:
-            return
-
-        cfg = self.ensure_guild_config(message.guild.id)
-        if not cfg["enabled"]:
-            return
-
-        uid = str(message.author.id)
-        now = time.time()
-
-        if uid not in cfg["user_risk"]:
-            cfg["user_risk"][uid] = {"risk": 0, "reasons": [], "messages": []}
-
-        cfg["user_risk"][uid]["messages"].append(now)
-        cfg["user_r_risk"][uid]["messages"] = [
-            t for t in cfg["user_risk"][uid]["messages"]
-            if now - t <= cfg["settings"]["spam_window"]
-        ]
-
-        if len(cfg["user_risk"][uid]["messages"]) >= cfg["settings"]["spam_messages"]:
-            self.add_risk(message.guild.id, message.author.id, 20, "Spam coordinado detectado")
-
-        self.update_guild(message.guild.id, cfg)
-
-        await self.auto_lockdown_check(message.guild)
-        await self.punish_high_risk_users(message.guild)
-
-    # ============================================================
-    # DETECCIÓN: CANALES
-    # ============================================================
-
-    @commands.Cog.listener()
-    async def on_guild_channel_delete(self, channel):
-        cfg = self.ensure_guild_config(channel.guild.id)
-        now = time.time()
-
-        cfg["channel_deletions"].append(now)
-        cfg["channel_deletions"] = [t for t in cfg["channel_deletions"] if now - t <= 10]
-
-        if len(cfg["channel_deletions"]) >= cfg["settings"]["channel_delete_limit"]:
-            self.add_risk(channel.guild.id, 0, 30, "Borrado masivo de canales")
-
-        self.update_guild(channel.guild.id, cfg)
-
-        await self.auto_lockdown_check(channel.guild)
-        await self.punish_high_risk_users(channel.guild)
-
-    @commands.Cog.listener()
-    async def on_guild_channel_create(self, channel):
-        cfg = self.ensure_guild_config(channel.guild.id)
-        now = time.time()
-
-        cfg["channel_creations"].append(now)
-        cfg["channel_creations"] = [t for t in cfg["channel_creations"] if now - t <= 10]
-
-        if len(cfg["channel_creations"]) >= cfg["settings"]["channel_create_limit"]:
-            self.add_risk(channel.guild.id, 0, 30, "Creación masiva de canales")
-
-        self.update_guild(channel.guild.id, cfg)
-
-        await self.auto_lockdown_check(channel.guild)
-        await self.punish_high_risk_users(channel.guild) 
-
-
-
-
-# ============================================================
-    # LOCKDOWN
-    # ============================================================
-
-    async def enable_lockdown(self, guild):
+    async def log_action(self, guild: discord.Guild, message: str):
         cfg = self.ensure_guild_config(guild.id)
-        if cfg["lockdown_active"]:
+        if not cfg["modules"]["logs"]:
+            return
+
+        channel_id = cfg["log_channel"]
+        if not channel_id:
+            return
+
+        channel = guild.get_channel(channel_id)
+        if not channel:
+            return
+
+        embed = discord.Embed(
+            title="🛡 Anti‑Raid — Log",
+            description=message,
+            color=discord.Color.orange(),
+            timestamp=datetime.now(timezone.utc)
+        )
+        try:
+            await channel.send(embed=embed)
+        except:
+            pass
+
+    # ========================================================
+    # LOCKDOWN
+    # ========================================================
+
+    async def enable_lockdown(self, guild: discord.Guild):
+        cfg = self.ensure_guild_config(guild.id)
+        if not cfg["modules"]["lockdown"]:
+            return
+
+        if cfg.get("lockdown_active", False):
             return
 
         cfg["lockdown_active"] = True
         cfg["lockdown_state"] = {}
 
-        for channel in guild.channels:
+        for channel in guild.text_channels:
             try:
                 ow = channel.overwrites_for(guild.default_role)
                 cfg["lockdown_state"][str(channel.id)] = {
                     "send_messages": ow.send_messages,
                     "add_reactions": ow.add_reactions
                 }
-
                 await channel.set_permissions(
                     guild.default_role,
                     send_messages=False,
@@ -259,15 +173,16 @@ class AntiRaid(commands.Cog):
                 pass
 
         self.update_guild(guild.id, cfg)
+        await self.log_action(guild, "🔒 Lockdown activado automáticamente por riesgo alto.")
 
-    async def disable_lockdown(self, guild):
+    async def disable_lockdown(self, guild: discord.Guild):
         cfg = self.ensure_guild_config(guild.id)
-        if not cfg["lockdown_active"]:
+        if not cfg.get("lockdown_active", False):
             return
 
-        for channel in guild.channels:
+        for channel in guild.text_channels:
             cid = str(channel.id)
-            if cid in cfg["lockdown_state"]:
+            if cid in cfg.get("lockdown_state", {}):
                 try:
                     ow = cfg["lockdown_state"][cid]
                     await channel.set_permissions(
@@ -281,26 +196,29 @@ class AntiRaid(commands.Cog):
         cfg["lockdown_active"] = False
         cfg["lockdown_state"] = {}
         self.update_guild(guild.id, cfg)
+        await self.log_action(guild, "🔓 Lockdown desactivado automáticamente por riesgo bajo.")
 
-    async def auto_lockdown_check(self, guild):
+    async def auto_lockdown_check(self, guild: discord.Guild):
         cfg = self.ensure_guild_config(guild.id)
-        if not cfg["enabled"]:
+        if not cfg["modules"]["lockdown"]:
             return
 
         risk = self.get_global_risk(guild.id)
 
-        if risk >= 200 and not cfg["lockdown_active"]:
+        if risk >= 200 and not cfg.get("lockdown_active", False):
             await self.enable_lockdown(guild)
-
-        if risk < 80 and cfg["lockdown_active"]:
+        elif risk < 80 and cfg.get("lockdown_active", False):
             await self.disable_lockdown(guild)
 
-    # ============================================================
+    # ========================================================
     # AUTO-BAN
-    # ============================================================
+    # ========================================================
 
-    async def punish_high_risk_users(self, guild):
+    async def punish_high_risk_users(self, guild: discord.Guild):
         cfg = self.ensure_guild_config(guild.id)
+        if not cfg["modules"]["autoban"]:
+            return
+
         to_reset = []
 
         for uid, data in cfg["user_risk"].items():
@@ -312,7 +230,11 @@ class AntiRaid(commands.Cog):
             except:
                 continue
 
-            reason = " | ".join(data["reasons"])
+            member = guild.get_member(int(uid))
+            if member and member.guild_permissions.administrator:
+                continue
+
+            reason = " | ".join(data["reasons"][-5:]) or "Actividad sospechosa"
 
             try:
                 await user.send(
@@ -326,7 +248,8 @@ class AntiRaid(commands.Cog):
                 pass
 
             try:
-                await guild.ban(user, reason=f"Anti-Raid: {reason}")
+                await guild.ban(user, reason=f"Anti‑Raid: {reason}")
+                await self.log_action(guild, f"🚫 Usuario {user} (`{user.id}`) baneado por riesgo alto. Razón: {reason}")
             except:
                 pass
 
@@ -338,186 +261,388 @@ class AntiRaid(commands.Cog):
 
         self.update_guild(guild.id, cfg)
 
-    # ============================================================
-    # SELECT MENU PARA LOGS
-    # ============================================================
+    # ========================================================
+    # DETECCIÓN: ENTRADAS
+    # ========================================================
 
-    class LogChannelSelect(discord.ui.Select):
+    @commands.Cog.listener()
+    async def on_member_join(self, member: discord.Member):
+        guild = member.guild
+        cfg = self.ensure_guild_config(guild.id)
+        if not cfg["enabled"]:
+            return
+
+        now = time.time()
+        cfg["join_times"].append(now)
+        cfg["join_times"] = [t for t in cfg["join_times"] if now - t <= cfg["settings"]["join_window"]]
+
+        # Cuentas nuevas (módulo C)
+        if cfg["modules"]["accounts"]:
+            age_days = (datetime.now(timezone.utc) - member.created_at).days
+            if age_days < 1:
+                self.add_risk(guild.id, member.id, 40, f"Cuenta muy nueva ({age_days} días)")
+            elif age_days < 3:
+                self.add_risk(guild.id, member.id, 25, f"Cuenta nueva ({age_days} días)")
+            elif age_days < cfg["settings"]["min_account_days"]:
+                self.add_risk(guild.id, member.id, 15, f"Cuenta relativamente nueva ({age_days} días)")
+
+        # Bots falsos (módulo A)
+        if cfg["modules"]["bots"]:
+            name = member.name.lower()
+            sus_words = ["bot", "raid", "spam", "mod", "admin"]
+            if any(w in name for w in sus_words) and not member.bot:
+                self.add_risk(guild.id, member.id, 20, "Nombre sospechoso tipo bot")
+
+        # Joins rápidos (módulo B)
+        if cfg["modules"]["joins"]:
+            if len(cfg["join_times"]) >= cfg["settings"]["join_limit"]:
+                self.add_risk(guild.id, member.id, 30, "Entradas masivas detectadas")
+
+        self.update_guild(guild.id, cfg)
+        await self.auto_lockdown_check(guild)
+        await self.punish_high_risk_users(guild)
+
+    # ========================================================
+    # DETECCIÓN: CANALES
+    # ========================================================
+
+    @commands.Cog.listener()
+    async def on_guild_channel_delete(self, channel: discord.abc.GuildChannel):
+        guild = channel.guild
+        cfg = self.ensure_guild_config(guild.id)
+        if not cfg["enabled"] or not cfg["modules"]["channels"]:
+            return
+
+        now = time.time()
+        cfg["channel_deletions"].append(now)
+        cfg["channel_deletions"] = [t for t in cfg["channel_deletions"] if now - t <= 10]
+
+        if len(cfg["channel_deletions"]) >= cfg["settings"]["channel_delete_limit"]:
+            self.add_risk(guild.id, 0, 40, "Borrado masivo de canales")
+            await self.log_action(guild, "⚠️ Borrado masivo de canales detectado.")
+
+        self.update_guild(guild.id, cfg)
+        await self.auto_lockdown_check(guild)
+        await self.punish_high_risk_users(guild)
+
+    @commands.Cog.listener()
+    async def on_guild_channel_create(self, channel: discord.abc.GuildChannel):
+        guild = channel.guild
+        cfg = self.ensure_guild_config(guild.id)
+        if not cfg["enabled"] or not cfg["modules"]["channels"]:
+            return
+
+        now = time.time()
+        cfg["channel_creations"].append(now)
+        cfg["channel_creations"] = [t for t in cfg["channel_creations"] if now - t <= 10]
+
+        if len(cfg["channel_creations"]) >= cfg["settings"]["channel_create_limit"]:
+            self.add_risk(guild.id, 0, 40, "Creación masiva de canales")
+            await self.log_action(guild, "⚠️ Creación masiva de canales detectada.")
+
+        self.update_guild(guild.id, cfg)
+        await self.auto_lockdown_check(guild)
+        await self.punish_high_risk_users(guild)
+
+    # ========================================================
+    # DETECCIÓN: ROLES (simple)
+    # ========================================================
+
+    @commands.Cog.listener()
+    async def on_guild_role_delete(self, role: discord.Role):
+        guild = role.guild
+        cfg = self.ensure_guild_config(guild.id)
+        if not cfg["enabled"] or not cfg["modules"]["roles"]:
+            return
+
+        self.add_risk(guild.id, 0, 20, f"Rol eliminado: {role.name}")
+        await self.log_action(guild, f"⚠️ Rol eliminado: {role.name}")
+        await self.auto_lockdown_check(guild)
+        await self.punish_high_risk_users(guild)
+
+    @commands.Cog.listener()
+    async def on_guild_role_create(self, role: discord.Role):
+        guild = role.guild
+        cfg = self.ensure_guild_config(guild.id)
+        if not cfg["enabled"] or not cfg["modules"]["roles"]:
+            return
+
+        self.add_risk(guild.id, 0, 15, f"Rol creado: {role.name}")
+        await self.log_action(guild, f"⚠️ Rol creado: {role.name}")
+        await self.auto_lockdown_check(guild)
+        await self.punish_high_risk_users(guild)
+
+    # ========================================================
+    # DETECCIÓN: MENSAJES (solo reputación / base)
+    # ========================================================
+
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        if message.author.bot or not message.guild:
+            return
+
+        cfg = self.ensure_guild_config(message.guild.id)
+        if not cfg["enabled"]:
+            return
+
+        uid = str(message.author.id)
+        now = time.time()
+
+        if uid not in cfg["user_risk"]:
+            cfg["user_risk"][uid] = {"risk": 0, "reasons": [], "messages": [], "history": []}
+
+        cfg["user_risk"][uid]["messages"].append(now)
+        cfg["user_risk"][uid]["messages"] = [
+            t for t in cfg["user_risk"][uid]["messages"]
+            if now - t <= 5
+        ]
+
+        self.update_guild(message.guild.id, cfg)
+
+    # ========================================================
+    # PANEL PRINCIPAL + SUBPANELES
+    # ========================================================
+
+    class ModuleSelect(discord.ui.Select):
         def __init__(self, cog, guild):
             self.cog = cog
             self.guild = guild
 
             options = [
-                discord.SelectOption(label=ch.name, value=str(ch.id))
-                for ch in guild.text_channels
+                discord.SelectOption(label="Bots falsos", value="bots", description="Detecta nombres sospechosos tipo bot."),
+                discord.SelectOption(label="Joins rápidos", value="joins", description="Detecta entradas masivas en poco tiempo."),
+                discord.SelectOption(label="Cuentas nuevas", value="accounts", description="Riesgo según edad de la cuenta."),
+                discord.SelectOption(label="Roles", value="roles", description="Detecta cambios masivos en roles."),
+                discord.SelectOption(label="Canales", value="channels", description="Detecta cambios masivos en canales."),
+                discord.SelectOption(label="Auto‑ban", value="autoban", description="Banea usuarios con riesgo alto."),
+                discord.SelectOption(label="Lockdown", value="lockdown", description="Bloquea el servidor si hay riesgo alto."),
+                discord.SelectOption(label="Logs", value="logs", description="Registra acciones sospechosas."),
+                discord.SelectOption(label="Reputación", value="reputation", description="Historial de riesgo por usuario.")
             ]
 
             super().__init__(
-                placeholder="Selecciona un canal de logs",
+                placeholder="Selecciona un módulo para configurar",
                 min_values=1,
                 max_values=1,
-                options=options
+                options=options,
+                custom_id="antiraid_module_select"
             )
 
         async def callback(self, interaction: discord.Interaction):
-            channel_id = int(self.values[0])
-            cfg = self.cog.ensure_guild_config(self.guild.id)
-            cfg["log_channel"] = channel_id
-            self.cog.update_guild(self.guild.id, cfg)
+            module_key = self.values[0]
+            view = AntiRaid.ModuleConfigView(self.cog, self.guild, module_key)
+            embed = view.build_embed()
+            await interaction.response.edit_message(embed=embed, view=view)
 
-            await interaction.response.send_message(
-                f"📘 Canal de logs configurado en <#{channel_id}>",
-                ephemeral=True
-            )
-
-    # ============================================================
-    # PANEL PRINCIPAL
-    # ============================================================
-
-    class Panel(discord.ui.View):
-        def __init__(self, cog, guild):
+    class ModuleConfigView(discord.ui.View):
+        def __init__(self, cog, guild, module_key: str):
             super().__init__(timeout=120)
             self.cog = cog
             self.guild = guild
+            self.module_key = module_key
 
-            self.add_item(AntiRaid.LogChannelSelect(cog, guild))
+            self.add_item(AntiRaid.ModuleSelect(cog, guild))
 
-        @discord.ui.button(label="Activar / Desactivar", style=discord.ButtonStyle.primary)
-        async def toggle(self, interaction, button):
+        def build_embed(self):
             cfg = self.cog.ensure_guild_config(self.guild.id)
-            cfg["enabled"] = not cfg["enabled"]
-            self.cog.update_guild(self.guild.id, cfg)
-            await interaction.response.send_message(
-                f"🛡 Anti-Raid ahora está **{'activado' if cfg['enabled'] else 'desactivado'}**",
-                ephemeral=True
-            )
+            modules = cfg["modules"]
 
-        @discord.ui.button(label="Cambiar sensibilidad", style=discord.ButtonStyle.secondary)
-        async def sensitivity(self, interaction, button):
-            cfg = self.cog.ensure_guild_config(self.guild.id)
-            order = ["low", "medium", "high"]
-            new = order[(order.index(cfg["settings"]["sensitivity"]) + 1) % 3]
-            cfg["settings"]["sensitivity"] = new
-            self.cog.update_guild(self.guild.id, cfg)
-            await interaction.response.send_message(f"📊 Sensibilidad cambiada a **{new}**", ephemeral=True)
+            names = {
+                "bots": "Bots falsos",
+                "joins": "Joins rápidos",
+                "accounts": "Cuentas nuevas",
+                "roles": "Roles",
+                "channels": "Canales",
+                "autoban": "Auto‑ban",
+                "lockdown": "Lockdown",
+                "logs": "Logs",
+                "reputation": "Reputación"
+            }
 
-        @discord.ui.button(label="Ver riesgo global", style=discord.ButtonStyle.secondary)
-        async def risk(self, interaction, button):
-            risk = self.cog.get_global_risk(self.guild.id)
-            await interaction.response.send_message(f"📊 Riesgo global: **{risk}**", ephemeral=True)
+            descriptions = {
+                "bots": "Detecta usuarios con nombres sospechosos tipo bot y les asigna riesgo.",
+                "joins": "Detecta entradas masivas en poco tiempo y aumenta el riesgo global.",
+                "accounts": "Evalúa la edad de la cuenta y asigna riesgo a cuentas nuevas.",
+                "roles": "Registra creación y borrado de roles como actividad potencialmente peligrosa.",
+                "channels": "Detecta creación y borrado masivo de canales.",
+                "autoban": "Banea automáticamente usuarios con riesgo muy alto.",
+                "lockdown": "Bloquea el servidor si el riesgo global es demasiado alto.",
+                "logs": "Envía registros de seguridad al canal configurado.",
+                "reputation": "Mantiene historial de riesgo y acciones sospechosas por usuario."
+            }
 
-        @discord.ui.button(label="Usuarios sospechosos", style=discord.ButtonStyle.secondary)
-        async def suspicious(self, interaction, button):
-            cfg = self.cog.ensure_guild_config(self.guild.id)
-            suspects = [
-                f"<@{uid}> — Riesgo: {data['risk']}"
-                for uid, data in cfg["user_risk"].items()
-                if data["risk"] >= 30
-            ]
+            name = names.get(self.module_key, self.module_key)
+            desc = descriptions.get(self.module_key, "Módulo de seguridad.")
 
-            if not suspects:
-                await interaction.response.send_message("✨ No hay usuarios sospechosos.", ephemeral=True)
-                return
-
-            await interaction.response.send_message(
-                "🚨 **Usuarios sospechosos:**\n" + "\n".join(suspects),
-                ephemeral=True
-            )
-
-        @discord.ui.button(label="Activar Lockdown", style=discord.ButtonStyle.danger)
-        async def lock_on(self, interaction, button):
-            await self.cog.enable_lockdown(self.guild)
-            await interaction.response.send_message("🔒 Lockdown activado.", ephemeral=True)
-
-        @discord.ui.button(label="Desactivar Lockdown", style=discord.ButtonStyle.success)
-        async def lock_off(self, interaction, button):
-            await self.cog.disable_lockdown(self.guild)
-            await interaction.response.send_message("🔓 Lockdown desactivado.", ephemeral=True)
-
-        @discord.ui.button(label="Reset riesgo global", style=discord.ButtonStyle.danger)
-        async def reset_risk(self, interaction, button):
-            self.cog.reset_global_risk(self.guild.id)
-            await interaction.response.send_message("🧹 Riesgo global reseteado.", ephemeral=True)
-
-        @discord.ui.button(label="Purgar sospechosos", style=discord.ButtonStyle.secondary)
-        async def purge_sus(self, interaction, button):
-            self.cog.purge_suspicious(self.guild.id)
-            await interaction.response.send_message("🗑 Usuarios sospechosos purgados.", ephemeral=True)
-
-        @discord.ui.button(label="Reset total Anti-Raid", style=discord.ButtonStyle.danger)
-        async def purge_all(self, interaction, button):
-            self.cog.purge_antiraid(self.guild.id)
-            await interaction.response.send_message("🧨 Anti-Raid reseteado completamente.", ephemeral=True)
-
-        @discord.ui.button(label="⚙ Configuración", style=discord.ButtonStyle.primary)
-        async def open_setup(self, interaction, button):
-            await interaction.response.send_message(
-                "⚙ Abriendo configuración...",
-                view=AntiRaid.SetupPanel(self.cog, self.guild),
-                ephemeral=True
-            )
-
-    # ============================================================
-    # SUBPANEL DE CONFIGURACIÓN
-    # ============================================================
-
-    class SetupPanel(discord.ui.View):
-        def __init__(self, cog, guild):
-            super().__init__(timeout=120)
-            self.cog = cog
-            self.guild = guild
-
-            self.add_item(AntiRaid.LogChannelSelect(cog, guild))
-
-        @discord.ui.button(label="Ver configuración", style=discord.ButtonStyle.secondary)
-        async def view_config(self, interaction, button):
-            cfg = self.cog.ensure_guild_config(self.guild.id)
+            status = "🟢 Activado" if modules.get(self.module_key, False) else "🔴 Desactivado"
 
             embed = discord.Embed(
-                title="⚙ Configuración Anti-Raid",
-                color=discord.Color.blurple()
+                title=f"🛡 Módulo: {name}",
+                description=desc,
+                color=discord.Color.green() if modules.get(self.module_key, False) else discord.Color.red()
             )
-            embed.add_field(name="Estado", value="Activado" if cfg["enabled"] else "Desactivado", inline=False)
-            embed.add_field(name="Sensibilidad", value=cfg["settings"]["sensitivity"], inline=False)
-            embed.add_field(name="Canal de logs", value=f"<#{cfg['log_channel']}>" if cfg["log_channel"] else "No configurado", inline=False)
-            embed.add_field(name="Join limit", value=cfg["settings"]["join_limit"], inline=True)
-            embed.add_field(name="Spam mensajes", value=cfg["settings"]["spam_messages"], inline=True)
-            embed.add_field(name="Riesgo global", value=str(self.cog.get_global_risk(self.guild.id)), inline=False)
+            embed.add_field(name="Estado", value=status, inline=False)
 
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            if self.module_key == "accounts":
+                cfg = self.cog.ensure_guild_config(self.guild.id)
+                embed.add_field(
+                    name="Edad mínima de cuenta",
+                    value=f"{cfg['settings']['min_account_days']} días",
+                    inline=False
+                )
 
-        @discord.ui.button(label="Reset configuración", style=discord.ButtonStyle.danger)
-        async def reset_config(self, interaction, button):
+            if self.module_key == "joins":
+                cfg = self.cog.ensure_guild_config(self.guild.id)
+                embed.add_field(
+                    name="Join limit / ventana",
+                    value=f"{cfg['settings']['join_limit']} usuarios / {cfg['settings']['join_window']}s",
+                    inline=False
+                )
+
+            if self.module_key == "channels":
+                cfg = self.cog.ensure_guild_config(self.guild.id)
+                embed.add_field(
+                    name="Límites de canales",
+                    value=f"Borrado: {cfg['settings']['channel_delete_limit']} | Creación: {cfg['settings']['channel_create_limit']}",
+                    inline=False
+                )
+
+            return embed
+
+        @discord.ui.button(
+            label="Activar / Desactivar módulo",
+            style=discord.ButtonStyle.primary,
+            emoji="⚙",
+            custom_id="antiraid_toggle_module_btn"
+        )
+        async def toggle_module(self, interaction: discord.Interaction, button: discord.ui.Button):
+            cfg = self.cog.ensure_guild_config(self.guild.id)
+            current = cfg["modules"].get(self.module_key, True)
+            cfg["modules"][self.module_key] = not current
+            self.cog.update_guild(self.guild.id, cfg)
+
+            embed = self.build_embed()
+            await interaction.response.edit_message(embed=embed, view=self)
+
+        @discord.ui.button(
+            label="Volver al panel",
+            style=discord.ButtonStyle.secondary,
+            emoji="⬅",
+            custom_id="antiraid_back_panel_btn"
+        )
+        async def back_panel(self, interaction: discord.Interaction, button: discord.ui.Button):
+            view = AntiRaid.MainPanel(self.cog, self.guild)
+            embed = view.build_main_embed()
+            await interaction.response.edit_message(embed=embed, view=view)
+
+    class MainPanel(discord.ui.View):
+        def __init__(self, cog, guild):
+            super().__init__(timeout=120)
+            self.cog = cog
+            self.guild = guild
+            self.add_item(AntiRaid.ModuleSelect(cog, guild))
+
+        def build_main_embed(self):
+            cfg = self.cog.ensure_guild_config(self.guild.id)
+            modules = cfg["modules"]
+
+            def status(key):
+                return "🟢" if modules.get(key, False) else "🔴"
+
+            desc = (
+                f"{status('bots')} **Bots falsos** — Detecta nombres sospechosos.\n"
+                f"{status('joins')} **Joins rápidos** — Detecta entradas masivas.\n"
+                f"{status('accounts')} **Cuentas nuevas** — Riesgo según edad.\n"
+                f"{status('roles')} **Roles** — Cambios en roles.\n"
+                f"{status('channels')} **Canales** — Cambios en canales.\n"
+                f"{status('autoban')} **Auto‑ban** — Banea usuarios peligrosos.\n"
+                f"{status('lockdown')} **Lockdown** — Bloquea el servidor por riesgo.\n"
+                f"{status('logs')} **Logs** — Registra acciones sospechosas.\n"
+                f"{status('reputation')} **Reputación** — Historial de riesgo.\n"
+            )
+
+            embed = discord.Embed(
+                title="🛡 Anti‑Raid Avanzado",
+                description="Selecciona un módulo en el menú para configurarlo.\n\n" + desc,
+                color=discord.Color.red()
+            )
+
+            return embed
+
+        @discord.ui.button(
+            label="Reset total",
+            style=discord.ButtonStyle.danger,
+            emoji="🧨",
+            custom_id="antiraid_reset_all_btn"
+        )
+        async def reset_all(self, interaction: discord.Interaction, button: discord.ui.Button):
             cfg = self.cog.ensure_guild_config(self.guild.id)
 
             cfg["enabled"] = True
             cfg["log_channel"] = None
+            cfg["join_times"] = []
+            cfg["user_risk"] = {}
+            cfg["channel_deletions"] = []
+            cfg["channel_creations"] = []
             cfg["settings"] = {
-                "sensitivity": "medium",
+                "sensitivity": "normal",
                 "join_limit": 5,
                 "join_window": 10,
                 "min_account_days": 7,
-                "spam_window": 5,
-                "spam_messages": 4,
                 "channel_delete_limit": 3,
                 "channel_create_limit": 3
+            }
+            cfg["modules"] = {
+                "bots": True,
+                "joins": True,
+                "accounts": True,
+                "roles": True,
+                "channels": True,
+                "autoban": True,
+                "lockdown": True,
+                "logs": True,
+                "reputation": True
             }
 
             self.cog.update_guild(self.guild.id, cfg)
 
-            await interaction.response.send_message("🔄 Configuración restablecida.", ephemeral=True)
+            embed = self.build_main_embed()
+            await interaction.response.edit_message(
+                content="🧨 Anti‑Raid reseteado completamente.",
+                embed=embed,
+                view=self
+            )
 
-        @discord.ui.button(label="Volver", style=discord.ButtonStyle.primary)
-        async def back(self, interaction, button):
-            await interaction.response.send_message(
-                "⬅ Volviendo al panel principal...",
-                view=AntiRaid.Panel(self.cog, self.guild),
+    # ========================================================
+    # COMANDO PRINCIPAL
+    # ========================================================
+
+    @app_commands.command(
+        name="antiraid",
+        description="Abre el panel Anti‑Raid avanzado."
+    )
+    async def antiraid_cmd(self, interaction: discord.Interaction):
+        guild = interaction.guild
+        if not guild:
+            return await interaction.response.send_message(
+                "❌ Este comando solo puede usarse en servidores.",
                 ephemeral=True
             )
+
+        self.ensure_guild_config(guild.id)
+        view = AntiRaid.MainPanel(self, guild)
+        embed = view.build_main_embed()
+
+        await interaction.response.send_message(
+            embed=embed,
+            view=view,
+            ephemeral=True
+        )
+
 
 # ============================================================
 # SETUP DEL COG
 # ============================================================
 
 async def setup(bot):
-    await bot.add_cog(AntiRaid(bot))
+    await bot.add_cog(AntiRaid(bot)) 
