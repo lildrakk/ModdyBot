@@ -115,13 +115,16 @@ class Info(commands.Cog):
         await interaction.response.send_message(embed=embed)
 
 
+
+
+
 @app_commands.command(
-    name="bot_servers",
+    name="server_info",
     description="Selecciona un servidor y muestra información detallada (solo owner)."
 )
 async def server_info(self, interaction: discord.Interaction):
 
-    OWNER_ID = 1394342273919225959  # <-- TU ID
+    OWNER_ID = 1394342273919225959  # <-- TU ID AQUÍ
 
     if interaction.user.id != OWNER_ID:
         return await interaction.response.send_message(
@@ -154,6 +157,10 @@ async def server_info(self, interaction: discord.Interaction):
     )
 
 
+# ============================
+# LISTENER DEL SELECT
+# ============================
+
 @commands.Cog.listener()
 async def on_interaction(self, interaction: discord.Interaction):
 
@@ -163,7 +170,7 @@ async def on_interaction(self, interaction: discord.Interaction):
     if interaction.data.get("custom_id") != "owner_select_server":
         return
 
-    OWNER_ID = 1394342273919225959
+    OWNER_ID = 1394342273919225959  # <-- TU ID
 
     if interaction.user.id != OWNER_ID:
         return await interaction.response.send_message(
@@ -180,14 +187,18 @@ async def on_interaction(self, interaction: discord.Interaction):
             ephemeral=True
         )
 
-    # Intentar obtener invitación
+    # ============================
+    # INVITACIÓN
+    # ============================
+
     invite_url = "No disponible"
+
     try:
         invites = await guild.invites()
+
         if invites:
             invite_url = invites[0].url
         else:
-            # Crear invitación nueva
             for c in guild.text_channels:
                 if c.permissions_for(guild.me).create_instant_invite:
                     invite = await c.create_invite(max_age=0, max_uses=0)
@@ -196,15 +207,16 @@ async def on_interaction(self, interaction: discord.Interaction):
     except:
         pass
 
-    # Contadores
+    # ============================
+    # INFORMACIÓN DEL SERVIDOR
+    # ============================
+
     total = guild.member_count
     bots = len([m for m in guild.members if m.bot])
     humans = total - bots
 
-    # Fecha creación
     fecha = guild.created_at.strftime("%d/%m/%Y %H:%M:%S")
 
-    # Embed
     embed = discord.Embed(
         title=f"📊 Información del servidor: {guild.name}",
         color=discord.Color.blurple()
@@ -212,7 +224,11 @@ async def on_interaction(self, interaction: discord.Interaction):
 
     embed.add_field(name="🆔 ID", value=f"`{guild.id}`", inline=False)
     embed.add_field(name="👑 Dueño", value=f"{guild.owner.mention} (`{guild.owner_id}`)", inline=False)
-    embed.add_field(name="👥 Miembros", value=f"Total: **{total}**\nHumanos: **{humans}**\nBots: **{bots}**", inline=False)
+    embed.add_field(
+        name="👥 Miembros",
+        value=f"Total: **{total}**\nHumanos: **{humans}**\nBots: **{bots}**",
+        inline=False
+    )
     embed.add_field(name="📅 Creado el", value=fecha, inline=False)
     embed.add_field(name="📌 Roles", value=str(len(guild.roles)), inline=True)
     embed.add_field(name="📁 Canales", value=str(len(guild.channels)), inline=True)
