@@ -44,10 +44,10 @@ class Info(commands.Cog):
         await interaction.response.send_message(embed=embed)
 
     # ============================
-    # SERVERINFO
+    # SERVERINFO (DEL SERVIDOR ACTUAL)
     # ============================
 
-    @app_commands.command(name="serverinfo", description="Muestra información detallada del servidor.")
+    @app_commands.command(name="serverinfo", description="Muestra información detallada del servidor actual.")
     async def serverinfo(self, interaction: discord.Interaction):
 
         guild = interaction.guild
@@ -71,7 +71,7 @@ class Info(commands.Cog):
 
         embed.add_field(name="🎭 Roles", value=len(guild.roles), inline=True)
         embed.add_field(name="🖼️ Emojis", value=len(guild.emojis), inline=True)
-        
+
         embed.add_field(name="📌 Boosts", value=guild.premium_subscription_count, inline=True)
         embed.add_field(name="💎 Nivel Boost", value=guild.premium_tier, inline=True)
 
@@ -114,136 +114,122 @@ class Info(commands.Cog):
 
         await interaction.response.send_message(embed=embed)
 
+    # ============================
+    # SERVER SELECT (SOLO OWNER)
+    # ============================
 
-
-
-
-@app_commands.command(
-    name="server_info",
-    description="Selecciona un servidor y muestra información detallada (solo owner)."
-)
-async def server_info(self, interaction: discord.Interaction):
-
-    OWNER_ID = 1394342273919225959  # <-- TU ID AQUÍ
-
-    if interaction.user.id != OWNER_ID:
-        return await interaction.response.send_message(
-            "❌ No tienes permiso para usar este comando.",
-            ephemeral=True
-        )
-
-    # Crear menú de selección
-    options = [
-        discord.SelectOption(
-            label=guild.name,
-            value=str(guild.id)
-        )
-        for guild in self.bot.guilds
-    ]
-
-    select = discord.ui.Select(
-        placeholder="Selecciona un servidor",
-        options=options,
-        custom_id="owner_select_server"
+    @app_commands.command(
+        name="server_info",
+        description="Selecciona un servidor y muestra información detallada (solo owner)."
     )
+    async def server_info(self, interaction: discord.Interaction):
 
-    view = discord.ui.View()
-    view.add_item(select)
+        OWNER_ID = 1394342273919225959
 
-    await interaction.response.send_message(
-        "Selecciona un servidor del menú:",
-        view=view,
-        ephemeral=True
-    )
+        if interaction.user.id != OWNER_ID:
+            return await interaction.response.send_message(
+                "❌ No tienes permiso para usar este comando.",
+                ephemeral=True
+            )
 
+        options = [
+            discord.SelectOption(label=guild.name, value=str(guild.id))
+            for guild in self.bot.guilds
+        ]
 
-# ============================
-# LISTENER DEL SELECT
-# ============================
-
-@commands.Cog.listener()
-async def on_interaction(self, interaction: discord.Interaction):
-
-    if interaction.type != discord.InteractionType.component:
-        return
-
-    if interaction.data.get("custom_id") != "owner_select_server":
-        return
-
-    OWNER_ID = 1394342273919225959  # <-- TU ID
-
-    if interaction.user.id != OWNER_ID:
-        return await interaction.response.send_message(
-            "❌ No tienes permiso para usar esto.",
-            ephemeral=True
+        select = discord.ui.Select(
+            placeholder="Selecciona un servidor",
+            options=options,
+            custom_id="owner_select_server"
         )
 
-    guild_id = int(interaction.data["values"][0])
-    guild = self.bot.get_guild(guild_id)
+        view = discord.ui.View()
+        view.add_item(select)
 
-    if not guild:
-        return await interaction.response.send_message(
-            "❌ No se pudo obtener el servidor.",
+        await interaction.response.send_message(
+            "Selecciona un servidor del menú:",
+            view=view,
             ephemeral=True
         )
 
     # ============================
-    # INVITACIÓN
+    # LISTENER DEL SELECT
     # ============================
 
-    invite_url = "No disponible"
+    @commands.Cog.listener()
+    async def on_interaction(self, interaction: discord.Interaction):
 
-    try:
-        invites = await guild.invites()
+        if interaction.type != discord.InteractionType.component:
+            return
 
-        if invites:
-            invite_url = invites[0].url
-        else:
-            for c in guild.text_channels:
-                if c.permissions_for(guild.me).create_instant_invite:
-                    invite = await c.create_invite(max_age=0, max_uses=0)
-                    invite_url = invite.url
-                    break
-    except:
-        pass
+        if interaction.data.get("custom_id") != "owner_select_server":
+            return
 
-    # ============================
-    # INFORMACIÓN DEL SERVIDOR
-    # ============================
+        OWNER_ID = 1394342273919225959
 
-    total = guild.member_count
-    bots = len([m for m in guild.members if m.bot])
-    humans = total - bots
+        if interaction.user.id != OWNER_ID:
+            return await interaction.response.send_message(
+                "❌ No tienes permiso para usar esto.",
+                ephemeral=True
+            )
 
-    fecha = guild.created_at.strftime("%d/%m/%Y %H:%M:%S")
+        guild_id = int(interaction.data["values"][0])
+        guild = self.bot.get_guild(guild_id)
 
-    embed = discord.Embed(
-        title=f"📊 Información del servidor: {guild.name}",
-        color=discord.Color.blurple()
-    )
+        if not guild:
+            return await interaction.response.send_message(
+                "❌ No se pudo obtener el servidor.",
+                ephemeral=True
+            )
 
-    embed.add_field(name="🆔 ID", value=f"`{guild.id}`", inline=False)
-    embed.add_field(name="👑 Dueño", value=f"{guild.owner.mention} (`{guild.owner_id}`)", inline=False)
-    embed.add_field(
-        name="👥 Miembros",
-        value=f"Total: **{total}**\nHumanos: **{humans}**\nBots: **{bots}**",
-        inline=False
-    )
-    embed.add_field(name="📅 Creado el", value=fecha, inline=False)
-    embed.add_field(name="📌 Roles", value=str(len(guild.roles)), inline=True)
-    embed.add_field(name="📁 Canales", value=str(len(guild.channels)), inline=True)
-    embed.add_field(name="💎 Boosts", value=str(guild.premium_subscription_count), inline=True)
-    embed.add_field(name="🔗 Invitación", value=invite_url, inline=False)
+        # Invitación
+        invite_url = "No disponible"
+        try:
+            invites = await guild.invites()
+            if invites:
+                invite_url = invites[0].url
+            else:
+                for c in guild.text_channels:
+                    if c.permissions_for(guild.me).create_instant_invite:
+                        invite = await c.create_invite(max_age=0, max_uses=0)
+                        invite_url = invite.url
+                        break
+        except:
+            pass
 
-    if guild.icon:
-        embed.set_thumbnail(url=guild.icon.url)
+        total = guild.member_count
+        bots = len([m for m in guild.members if m.bot])
+        humans = total - bots
 
-    if guild.banner:
-        embed.set_image(url=guild.banner.url)
+        fecha = guild.created_at.strftime("%d/%m/%Y %H:%M:%S")
 
-    await interaction.response.send_message(embed=embed, ephemeral=True)
+        embed = discord.Embed(
+            title=f"📊 Información del servidor: {guild.name}",
+            color=discord.Color.blurple()
+        )
+
+        embed.add_field(name="🆔 ID", value=f"`{guild.id}`", inline=False)
+        embed.add_field(name="👑 Dueño", value=f"{guild.owner.mention} (`{guild.owner_id}`)", inline=False)
+        embed.add_field(
+            name="👥 Miembros",
+            value=f"Total: **{total}**\nHumanos: **{humans}**\nBots: **{bots}**",
+            inline=False
+        )
+        embed.add_field(name="📅 Creado el", value=fecha, inline=False)
+        embed.add_field(name="📌 Roles", value=str(len(guild.roles)), inline=True)
+        embed.add_field(name="📁 Canales", value=str(len(guild.channels)), inline=True)
+        embed.add_field(name="💎 Boosts", value=str(guild.premium_subscription_count), inline=True)
+        embed.add_field(name="🔗 Invitación", value=invite_url, inline=False)
+
+        if guild.icon:
+            embed.set_thumbnail(url=guild.icon.url)
+
+        if guild.banner:
+            embed.set_image(url=guild.banner.url)
+
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
 async def setup(bot):
     bot.launch_time = datetime.datetime.utcnow()
-    await bot.add_cog(Info(bot))
+    await bot.add_cog(Info(bot)) 
