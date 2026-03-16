@@ -28,7 +28,7 @@ def save_config(data):
 
 
 # ============================================================
-# COG ANTI‑FLOOD
+# COG ANTI‑FLOOD PRO
 # ============================================================
 
 class AntiFlood(commands.Cog):
@@ -54,7 +54,8 @@ class AntiFlood(commands.Cog):
 
                 "settings": {
                     "interval": 4,
-                    "max_messages": 5
+                    "max_messages": 5,
+                    "delete_count": 2
                 }
             }
             save_config(self.config)
@@ -113,14 +114,17 @@ class AntiFlood(commands.Cog):
             if nivel == "bajo":
                 cfg["settings"]["interval"] = 3
                 cfg["settings"]["max_messages"] = 7
+                cfg["settings"]["delete_count"] = 1
 
             elif nivel == "medio":
                 cfg["settings"]["interval"] = 4
                 cfg["settings"]["max_messages"] = 5
+                cfg["settings"]["delete_count"] = 2
 
             elif nivel == "alto":
                 cfg["settings"]["interval"] = 5
                 cfg["settings"]["max_messages"] = 3
+                cfg["settings"]["delete_count"] = 3
 
         # Acción
         if accion:
@@ -158,32 +162,45 @@ class AntiFlood(commands.Cog):
         if not message.guild or message.author.bot:
             return
 
-        guild_id = str(message.guild.id)
-        cfg = self.ensure_guild(message.guild.id)
+        guild = message.guild
+        user = message.author
 
+        cfg = self.ensure_guild(guild.id)
         if not cfg["enabled"]:
             return
 
-        user = message.author
+        # No sancionar owner ni admins
+        if user == guild.owner or user.guild_permissions.administrator:
+            return
+
         now = time.time()
 
         # Historial
         if user.id not in self.user_messages:
             self.user_messages[user.id] = []
 
-        self.user_messages[user.id].append(now)
+        self.user_messages[user.id].append((now, message))
 
         interval = cfg["settings"]["interval"]
         max_msgs = cfg["settings"]["max_messages"]
+        delete_count = cfg["settings"]["delete_count"]
 
         # Limpiar mensajes viejos
         self.user_messages[user.id] = [
-            t for t in self.user_messages[user.id]
+            (t, msg) for t, msg in self.user_messages[user.id]
             if now - t <= interval
         ]
 
         # Flood detectado
         if len(self.user_messages[user.id]) >= max_msgs:
+
+            # Borrar mensajes recientes del usuario
+            to_delete = self.user_messages[user.id][-delete_count:]
+            for _, msg in to_delete:
+                try:
+                    await msg.delete()
+                except:
+                    pass
 
             # Primer aviso
             if user.id not in self.warned or now - self.warned[user.id] > interval:
@@ -191,15 +208,11 @@ class AntiFlood(commands.Cog):
 
                 embed = discord.Embed(
                     title="⚠️ Actividad sospechosa",
-                    description=f"{user.mention}, estás enviando mensajes **muy rápido**.\nSi sigues así, recibirás una sanción.",
+                    description=f"{user.mention}, estás enviando mensajes **demasiado rápido**.\nReduce la velocidad o se aplicará una sanción.",
                     color=discord.Color.yellow()
                 )
 
-                try:
-                    await message.channel.send(embed=embed)
-                except:
-                    pass
-
+                await message.channel.send(embed=embed)
                 return
 
             # Aplicar sanción
@@ -214,20 +227,20 @@ class AntiFlood(commands.Cog):
         guild = message.guild
         action = cfg["accion"]
 
-        # Verificar permisos
-        missing_perms = False
+        # Verificar permisos del BOT
+        missing = False
 
         if action == "ban" and not guild.me.guild_permissions.ban_members:
-            missing_perms = True
+            missing = True
         if action == "kick" and not guild.me.guild_permissions.kick_members:
-            missing_perms = True
+            missing = True
         if action == "mute" and not guild.me.guild_permissions.moderate_members:
-            missing_perms = True
+            missing = True
 
-        if missing_perms:
+        if missing:
             embed = discord.Embed(
                 title="⚠️ Flood detectado",
-                description=f"El usuario {user.mention} está haciendo **flood**, pero no tengo permisos para aplicar la acción configurada.",
+                description=f"Detecté flood de {user.mention}, pero **no tengo permisos** para aplicar la acción configurada.",
                 color=discord.Color.yellow()
             )
             await message.channel.send(embed=embed)
@@ -239,7 +252,6 @@ class AntiFlood(commands.Cog):
             description=f"Usuario: {user.mention}\nAcción: **{action}**\nRazón: Flood",
             color=discord.Color.red()
         )
-
         await message.channel.send(embed=embed)
 
         # Ejecutar acción
