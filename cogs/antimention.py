@@ -169,7 +169,7 @@ class AntiMention(commands.Cog):
         self,
         interaction: discord.Interaction,
         tipo: app_commands.Choice[str],
-        objetivo: discord.Object
+        objetivo
     ):
         guild = interaction.guild
         cfg = self.ensure_guild(guild.id)
@@ -216,7 +216,7 @@ class AntiMention(commands.Cog):
         self,
         interaction: discord.Interaction,
         tipo: app_commands.Choice[str],
-        objetivo: discord.Object
+        objetivo
     ):
         guild = interaction.guild
         cfg = self.ensure_guild(guild.id)
