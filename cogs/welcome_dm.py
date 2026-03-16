@@ -36,7 +36,7 @@ def save_dm(data):
 class WelcomeDMCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.dm_config = load_dm()  # Carga inicial SIEMPRE
+        self.dm_config = load_dm()
 
     # ============================
     # /dmwelcome
@@ -61,9 +61,7 @@ class WelcomeDMCog(commands.Cog):
                 ephemeral=True
             )
 
-        # Recargar SIEMPRE antes de editar
         self.dm_config = load_dm()
-
         guild_id = str(interaction.guild.id)
 
         if guild_id not in self.dm_config["servers"]:
@@ -91,17 +89,34 @@ class WelcomeDMCog(commands.Cog):
         user = interaction.user
 
         descripcion = (
-            f"👋 **Hola {user.name}**, bienvenido a **{guild.name}**.\n\n"
-            f"Actualmente somos **{guild.member_count} miembros**.\n\n"
-            "Gracias por unirte a un servidor que utiliza nuestro sistema de seguridad.\n"
-            "Disfruta tu estancia y recuerda seguir las normas del servidor. 📋\n\n"
-            "🤖 **Sobre ModdyBot**\n"
-            "ModdyBot es un sistema avanzado de seguridad y gestión.\n\n"
-            "🛠️ **Soporte**\n"
-            "[Entrar al soporte](https://discord.gg/u8W4jv7NXx)\n\n"
-            "✨ **Añade ModdyBot**\n"
-            "[Invitar ModdyBot](https://discord.com/oauth2/authorize?client_id=1450924184606740642&permissions=8&integration_type=0&scope=bot)\n\n"
-            "¡Nos alegra tenerte aquí!"
+            f"👋 **¡Hey {user.name}!**\n"
+            f"Te doy la bienvenida a **{guild.name}** ✨\n\n"
+
+            f"📊 Actualmente somos **{guild.member_count} personas** formando parte de esta comunidad.\n"
+            "Es un placer tenerte por aquí, de verdad.\n\n"
+
+            "🤖 **¿Quién soy yo?**\n"
+            "**ModdyBot** es tu compañero de seguridad y organización dentro del servidor.\n"
+            "Estoy aquí para ayudarte a tener una experiencia cómoda, segura y sin complicaciones.\n\n"
+
+            "🛡️ **ModdyBot te acompaña**\n"
+            "Mi misión es mantener el servidor seguro, organizado y funcionando sin problemas.\n"
+            "Si necesitas algo, no dudes en contactar con el staff.\n\n"
+
+            "📘 **Consejos para empezar**\n"
+            "• Échale un vistazo a las normas del servidor 📜\n"
+            "• Respeta a los demás miembros 🤝\n"
+            "• Y sobre todo… ¡pásalo bien! 😄\n\n"
+
+            "🛠️ **¿Necesitas ayuda?**\n"
+            "Puedes entrar a nuestro servidor oficial de soporte:\n"
+            "[🔗 Servidor de soporte](https://discord.gg/u8W4jv7NXx)\n\n"
+
+            "🚀 **¿Quieres usar ModdyBot en tus servidores?**\n"
+            "[✨ Invitar ModdyBot](https://discord.com/oauth2/authorize?client_id=1450924184606740642&permissions=8&integration_type=0&scope=bot)\n\n"
+
+            "🎉 **¡Gracias por unirte!**\n"
+            "Estoy seguro de que encajarás genial aquí."
         )
 
         embed = discord.Embed(description=descripcion, color=discord.Color.blue())
@@ -128,9 +143,7 @@ class WelcomeDMCog(commands.Cog):
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
 
-        # Recargar SIEMPRE al entrar un usuario
         self.dm_config = load_dm()
-
         guild_id = str(member.guild.id)
 
         if guild_id not in self.dm_config["servers"]:
@@ -142,17 +155,34 @@ class WelcomeDMCog(commands.Cog):
             return
 
         descripcion = (
-            f"👋 **Hola {member.name}**, bienvenido a **{member.guild.name}**.\n\n"
-            f"Actualmente somos **{member.guild.member_count} miembros**.\n\n"
-            "Gracias por unirte a un servidor que utiliza nuestro sistema de seguridad.\n"
-            "Disfruta tu estancia y recuerda seguir las normas del servidor. 📋\n\n"
-            "🤖 **Sobre ModdyBot**\n"
-            "ModdyBot es un sistema avanzado de seguridad y gestión.\n\n"
-            "🛠️ **Soporte**\n"
-            "[Entrar al soporte](https://discord.gg/u8W4jv7NXx)\n\n"
-            "✨ **Añade ModdyBot**\n"
-            "[Invitar ModdyBot](https://discord.com/oauth2/authorize?client_id=1450924184606740642&permissions=8&integration_type=0&scope=bot)\n\n"
-            "¡Nos alegra tenerte aquí!"
+            f"👋 **¡Hey {member.name}!**\n"
+            f"Te doy la bienvenida a **{member.guild.name}** ✨\n\n"
+
+            f"📊 Actualmente somos **{member.guild.member_count} personas** formando parte de esta comunidad.\n"
+            "Es un placer tenerte por aquí, de verdad.\n\n"
+
+            "🤖 **¿Quién soy yo?**\n"
+            "**ModdyBot** es tu compañero de seguridad y organización dentro del servidor.\n"
+            "Estoy aquí para ayudarte a tener una experiencia cómoda, segura y sin complicaciones.\n\n"
+
+            "🛡️ **ModdyBot te acompaña**\n"
+            "Mi misión es mantener el servidor seguro, organizado y funcionando sin problemas.\n"
+            "Si necesitas algo, no dudes en contactar con el staff.\n\n"
+
+            "📘 **Consejos para empezar**\n"
+            "• Échale un vistazo a las normas del servidor 📜\n"
+            "• Respeta a los demás miembros 🤝\n"
+            "• Y sobre todo… ¡pásalo bien! 😄\n\n"
+
+            "🛠️ **¿Necesitas ayuda?**\n"
+            "Puedes entrar a nuestro servidor oficial de soporte:\n"
+            "[🔗 Servidor de soporte](https://discord.gg/u8W4jv7NXx)\n\n"
+
+            "🚀 **¿Quieres usar ModdyBot en tus servidores?**\n"
+            "[✨ Invitar ModdyBot](https://discord.com/oauth2/authorize?client_id=1450924184606740642&permissions=8&integration_type=0&scope=bot)\n\n"
+
+            "🎉 **¡Gracias por unirte!**\n"
+            "Estoy seguro de que encajarás genial aquí."
         )
 
         embed = discord.Embed(description=descripcion, color=discord.Color.blue())
