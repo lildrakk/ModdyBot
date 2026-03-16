@@ -88,12 +88,16 @@ class SecurityScan(commands.Cog):
 
         if score >= 90:
             risk = "🟥 Muy peligroso"
+            conclusion = "➡️ Este rol puede destruir el servidor si cae en malas manos."
         elif score >= 60:
             risk = "🟧 Peligroso"
+            conclusion = "➡️ Este rol tiene permisos muy sensibles, úsalo con cuidado."
         elif score >= 25:
             risk = "🟨 Moderado"
+            conclusion = "➡️ Este rol puede causar molestias, pero no es crítico."
         else:
             risk = "🟩 Seguro"
+            conclusion = "➡️ Este rol no representa un riesgo importante."
 
         return {
             "critical": critical,
@@ -101,6 +105,7 @@ class SecurityScan(commands.Cog):
             "moderate": moderate,
             "score": score,
             "risk": risk,
+            "conclusion": conclusion,
             "members": member_count
         }
 
@@ -125,7 +130,7 @@ class SecurityScan(commands.Cog):
         return risky
 
     # ============================
-    # EMBED PRINCIPAL
+    # EMBED COMPLETO
     # ============================
 
     async def build_security_embed(self, guild: discord.Guild):
@@ -164,6 +169,10 @@ class SecurityScan(commands.Cog):
         for ch in guild.text_channels:
             risky_channels.extend(self.analyze_channel(ch))
 
+        # ============================
+        # RIESGO GLOBAL
+        # ============================
+
         avg_score = total_score / max(len(role_analysis), 1)
         if avg_score >= 80:
             server_risk = "🟥 Riesgo global: Muy alto"
@@ -175,13 +184,13 @@ class SecurityScan(commands.Cog):
             server_risk = "🟩 Riesgo global: Bajo"
 
         embed = discord.Embed(
-            title="🛡️ SecurityScan — Análisis del servidor",
-            description="Análisis completo de roles, permisos, bots, usuarios y canales.",
+            title="🛡️ SecurityScan — Análisis completo del servidor",
+            description="Análisis avanzado de roles, permisos, bots, usuarios y canales.",
             color=discord.Color.red() if "🟥" in server_risk else discord.Color.orange()
         )
 
         embed.add_field(
-            name="📊 Resumen",
+            name="📊 Resumen del servidor",
             value=(
                 f"{server_risk}\n"
                 f"• Roles analizados: `{len(role_analysis)}`\n"
@@ -193,10 +202,177 @@ class SecurityScan(commands.Cog):
             inline=False
         )
 
+        # ============================
+        # ROLES PELIGROSOS
+        # ============================
+
+        if critical_roles:
+            embed.add_field(
+                name="🟥 Roles MUY peligrosos",
+                value="\n".join(f"• {r.mention} (`{r.name}`)" for r in critical_roles)[:1024],
+                inline=False
+            )
+        else:
+            embed.add_field(
+                name="🟥 Roles MUY peligrosos",
+                value="✅ No se han detectado roles extremadamente peligrosos.",
+                inline=False
+            )
+
+        if dangerous_roles:
+            embed.add_field(
+                name="🟧 Roles peligrosos",
+                value="\n".join(f"• {r.mention} (`{r.name}`)" for r in dangerous_roles)[:1024],
+                inline=False
+            )
+        else:
+            embed.add_field(
+                name="🟧 Roles peligrosos",
+                value="✅ No se han detectado roles peligrosos significativos.",
+                inline=False
+            )
+
+        # ============================
+        # BOTS PELIGROSOS
+        # ============================
+
+        if bots_dangerous:
+            text = ""
+            for m, s in sorted(bots_dangerous, key=lambda x: x[1], reverse=True)[:10]:
+                text += f"• {m.mention} — riesgo `{s}`\n"
+            embed.add_field(
+                name="🤖 Bots con permisos peligrosos",
+                value=text[:1024],
+                inline=False
+            )
+        else:
+            embed.add_field(
+                name="🤖 Bots con permisos peligrosos",
+                value="✅ No se han detectado bots con riesgo alto.",
+                inline=False
+            )
+
+        # ============================
+        # USUARIOS PELIGROSOS
+        # ============================
+
+        if users_dangerous:
+            text = ""
+            for m, s in sorted(users_dangerous, key=lambda x: x[1], reverse=True)[:10]:
+                text += f"• {m.mention} — riesgo `{s}`\n"
+            embed.add_field(
+                name="👤 Usuarios con roles peligrosos",
+                value=text[:1024],
+                inline=False
+            )
+        else:
+            embed.add_field(
+                name="👤 Usuarios con roles peligrosos",
+                value="✅ No se han detectado usuarios con riesgo alto.",
+                inline=False
+            )
+
+        # ============================
+        # CANALES PELIGROSOS
+        # ============================
+
+        if risky_channels:
+            embed.add_field(
+                name="📢 Canales con configuración peligrosa",
+                value="\n".join(f"• {t}" for t in risky_channels)[:1024],
+                inline=False
+            )
+        else:
+            embed.add_field(
+                name="📢 Canales con configuración peligrosa",
+                value="✅ No se han detectado canales con permisos críticos mal configurados.",
+                inline=False
+            )
+
+        # ============================
+        # WEBHOOKS
+        # ============================
+
+        webhooks_info = []
+        try:
+            for ch in guild.text_channels:
+                hooks = await ch.webhooks()
+                for wh in hooks:
+                    webhooks_info.append(f"{wh.name} en {ch.mention}")
+        except:
+            pass
+
+        if webhooks_info:
+            embed.add_field(
+                name="🪝 Webhooks detectados",
+                value="\n".join(f"• {w}" for w in webhooks_info)[:1024],
+                inline=False
+            )
+        else:
+            embed.add_field(
+                name="🪝 Webhooks detectados",
+                value="ℹ️ No se han encontrado webhooks o no se pudieron listar.",
+                inline=False
+            )
+
+        # ============================
+        # INVITACIONES
+        # ============================
+
+        invites_info = []
+        try:
+            invites = await guild.invites()
+            for inv in invites:
+                if inv.max_age == 0 and inv.max_uses == 0:
+                    invites_info.append(f"Invitación permanente: {inv.code} (creada por {inv.inviter})")
+        except:
+            pass
+
+        if invites_info:
+            embed.add_field(
+                name="🔗 Invitaciones permanentes",
+                value="\n".join(f"• {i}" for i in invites_info)[:1024],
+                inline=False
+            )
+        else:
+            embed.add_field(
+                name="🔗 Invitaciones permanentes",
+                value="✅ No se han detectado invitaciones permanentes sin límite.",
+                inline=False
+            )
+
+        # ============================
+        # RECOMENDACIONES
+        # ============================
+
+        recomendaciones = []
+
+        if critical_roles:
+            recomendaciones.append("• Revisa los roles **muy peligrosos** y limita quién los tiene.")
+        if dangerous_roles:
+            recomendaciones.append("• Baja de posición o quita permisos a los **roles peligrosos**.")
+        if bots_dangerous:
+            recomendaciones.append("• Revisa los bots con permisos elevados.")
+        if risky_channels:
+            recomendaciones.append("• Ajusta permisos en los canales marcados como peligrosos.")
+        if invites_info:
+            recomendaciones.append("• Elimina invitaciones permanentes que no sean necesarias.")
+
+        if not recomendaciones:
+            recomendaciones.append("• La configuración actual parece razonablemente segura.")
+
+        embed.add_field(
+            name="🛠️ Recomendaciones",
+            value="\n".join(recomendaciones)[:1024],
+            inline=False
+        )
+
+        embed.set_footer(text=f"Análisis completado en {guild.name}.")
+
         return embed, role_analysis
 
     # ============================
-    # COMANDO PRINCIPAL (ARREGLADO)
+    # COMANDO PRINCIPAL
     # ============================
 
     @app_commands.command(
@@ -229,4 +405,4 @@ class SecurityScan(commands.Cog):
 
 
 async def setup(bot):
-    await bot.add_cog(SecurityScan(bot)) 
+    await bot.add_cog(SecurityScan(bot))
