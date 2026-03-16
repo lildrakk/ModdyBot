@@ -2,9 +2,6 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 
-# OPCIONAL: canal por defecto para exportar informes (puedes poner None y manejarlo tú)
-DEFAULT_SECURITY_LOG_CHANNEL_ID = None  # pon aquí un ID si quieres
-
 class SecurityScanView(discord.ui.View):
     def __init__(self, cog, interaction, analysis_data):
         super().__init__(timeout=120)
@@ -12,35 +9,19 @@ class SecurityScanView(discord.ui.View):
         self.interaction = interaction
         self.analysis_data = analysis_data
 
-    @discord.ui.button(label="🔄 Actualizar análisis", style=discord.ButtonStyle.blurple, custom_id="securityscan_refresh")
+    @discord.ui.button(label="🔄 Actualizar análisis", style=discord.ButtonStyle.blurple)
     async def refresh_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+
         if interaction.user.id != self.interaction.user.id:
-            return await interaction.response.send_message("❌ Solo quien ejecutó el comando puede usar estos botones.", ephemeral=True)
-
-        embed, analysis_data = await self.cog.build_security_embed(interaction.guild)
-        self.analysis_data = analysis_data
-        await interaction.response.edit_message(embed=embed, view=self)
-
-    @discord.ui.button(label="📤 Exportar a canal", style=discord.ButtonStyle.gray, custom_id="securityscan_export")
-    async def export_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id != self.interaction.user.id:
-            return await interaction.response.send_message("❌ Solo quien ejecutó el comando puede usar estos botones.", ephemeral=True)
-
-        guild = interaction.guild
-        channel = None
-
-        if DEFAULT_SECURITY_LOG_CHANNEL_ID:
-            channel = guild.get_channel(DEFAULT_SECURITY_LOG_CHANNEL_ID)
-
-        if channel is None:
             return await interaction.response.send_message(
-                "⚠️ No hay un canal de logs configurado en el código (`DEFAULT_SECURITY_LOG_CHANNEL_ID`).",
+                "❌ Solo quien ejecutó el comando puede usar estos botones.",
                 ephemeral=True
             )
 
-        embed, _ = await self.cog.build_security_embed(guild)
-        await channel.send(embed=embed)
-        await interaction.response.send_message("✅ Informe exportado al canal de seguridad.", ephemeral=True)
+        embed, analysis_data = await self.cog.build_security_embed(interaction.guild)
+        self.analysis_data = analysis_data
+
+        await interaction.response.edit_message(embed=embed, view=self)
 
 
 class SecurityScan(commands.Cog):
@@ -73,7 +54,7 @@ class SecurityScan(commands.Cog):
         }
 
     # ============================
-    # UTILIDADES DE RIESGO
+    # ANALIZADORES
     # ============================
 
     def analyze_role(self, role: discord.Role, bot_top_role: discord.Role, member_count: int):
@@ -95,13 +76,9 @@ class SecurityScan(commands.Cog):
             if getattr(perms, perm, False):
                 moderate.append(desc)
 
-        score = 0
-        score += len(critical) * 30
-        score += len(dangerous) * 15
-        score += len(moderate) * 5
+        score = len(critical) * 30 + len(dangerous) * 15 + len(moderate) * 5
 
-        above_bot = role.position > bot_top_role.position
-        if above_bot:
+        if role.position > bot_top_role.position:
             score += 40
 
         if member_count > 50 and (critical or dangerous):
@@ -111,16 +88,12 @@ class SecurityScan(commands.Cog):
 
         if score >= 90:
             risk = "🟥 Muy peligroso"
-            conclusion = "➡️ Este rol puede destruir el servidor si cae en malas manos."
         elif score >= 60:
             risk = "🟧 Peligroso"
-            conclusion = "➡️ Este rol tiene permisos muy sensibles, úsalo con cuidado."
         elif score >= 25:
             risk = "🟨 Moderado"
-            conclusion = "➡️ Este rol puede causar molestias, pero no es crítico."
         else:
             risk = "🟩 Seguro"
-            conclusion = "➡️ Este rol no representa un riesgo importante."
 
         return {
             "critical": critical,
@@ -128,8 +101,6 @@ class SecurityScan(commands.Cog):
             "moderate": moderate,
             "score": score,
             "risk": risk,
-            "conclusion": conclusion,
-            "above_bot": above_bot,
             "members": member_count
         }
 
@@ -154,15 +125,14 @@ class SecurityScan(commands.Cog):
         return risky
 
     # ============================
-    # CONSTRUCCIÓN DEL EMBED
+    # EMBED PRINCIPAL
     # ============================
 
     async def build_security_embed(self, guild: discord.Guild):
         bot_member = guild.get_member(self.bot.user.id)
         bot_top_role = bot_member.top_role if bot_member else guild.roles[-1]
 
-        roles = [r for r in guild.roles if not r.is_default()]
-        roles = roles[::-1]
+        roles = [r for r in guild.roles if not r.is_default()][::-1]
 
         role_analysis = []
         total_score = 0
@@ -194,24 +164,6 @@ class SecurityScan(commands.Cog):
         for ch in guild.text_channels:
             risky_channels.extend(self.analyze_channel(ch))
 
-        webhooks_info = []
-        try:
-            for ch in guild.text_channels:
-                hooks = await ch.webhooks()
-                for wh in hooks:
-                    webhooks_info.append(f"{wh.name} en {ch.mention}")
-        except Exception:
-            pass
-
-        invites_info = []
-        try:
-            invites = await guild.invites()
-            for inv in invites:
-                if inv.max_age == 0 and inv.max_uses == 0:
-                    invites_info.append(f"Invitación permanente: {inv.code} (creada por {inv.inviter})")
-        except Exception:
-            pass
-
         avg_score = total_score / max(len(role_analysis), 1)
         if avg_score >= 80:
             server_risk = "🟥 Riesgo global: Muy alto"
@@ -223,16 +175,13 @@ class SecurityScan(commands.Cog):
             server_risk = "🟩 Riesgo global: Bajo"
 
         embed = discord.Embed(
-            title="🛡️ SecurityScan — Análisis completo de seguridad",
-            description=(
-                "Informe avanzado de roles, permisos, bots, usuarios y configuración de seguridad.\n"
-                "Este análisis es **solo visible para ti**."
-            ),
+            title="🛡️ SecurityScan — Análisis del servidor",
+            description="Análisis completo de roles, permisos, bots, usuarios y canales.",
             color=discord.Color.red() if "🟥" in server_risk else discord.Color.orange()
         )
 
         embed.add_field(
-            name="📊 Resumen del servidor",
+            name="📊 Resumen",
             value=(
                 f"{server_risk}\n"
                 f"• Roles analizados: `{len(role_analysis)}`\n"
@@ -244,154 +193,40 @@ class SecurityScan(commands.Cog):
             inline=False
         )
 
-        if critical_roles:
-            embed.add_field(
-                name="🟥 Roles MUY peligrosos",
-                value="\n".join(f"• {r.mention} (`{r.name}`)" for r in critical_roles)[:1024],
-                inline=False
-            )
-        else:
-            embed.add_field(
-                name="🟥 Roles MUY peligrosos",
-                value="✅ No se han detectado roles extremadamente peligrosos.",
-                inline=False
-            )
-
-        if dangerous_roles:
-            embed.add_field(
-                name="🟧 Roles peligrosos",
-                value="\n".join(f"• {r.mention} (`{r.name}`)" for r in dangerous_roles)[:1024],
-                inline=False
-            )
-        else:
-            embed.add_field(
-                name="🟧 Roles peligrosos",
-                value="✅ No se han detectado roles peligrosos significativos.",
-                inline=False
-            )
-
-        if bots_dangerous:
-            text = ""
-            for m, s in sorted(bots_dangerous, key=lambda x: x[1], reverse=True)[:10]:
-                text += f"• {m.mention} — riesgo `{s}`\n"
-            embed.add_field(
-                name="🤖 Bots con permisos peligrosos",
-                value=text[:1024],
-                inline=False
-            )
-        else:
-            embed.add_field(
-                name="🤖 Bots con permisos peligrosos",
-                value="✅ No se han detectado bots con riesgo alto.",
-                inline=False
-            )
-
-        if users_dangerous:
-            text = ""
-            for m, s in sorted(users_dangerous, key=lambda x: x[1], reverse=True)[:10]:
-                text += f"• {m.mention} — riesgo `{s}`\n"
-            embed.add_field(
-                name="👤 Usuarios con roles peligrosos",
-                value=text[:1024],
-                inline=False
-            )
-        else:
-            embed.add_field(
-                name="👤 Usuarios con roles peligrosos",
-                value="✅ No se han detectado usuarios con riesgo alto.",
-                inline=False
-            )
-
-        if risky_channels:
-            embed.add_field(
-                name="📢 Canales con configuración peligrosa",
-                value="\n".join(f"• {t}" for t in risky_channels)[:1024],
-                inline=False
-            )
-        else:
-            embed.add_field(
-                name="📢 Canales con configuración peligrosa",
-                value="✅ No se han detectado canales con permisos críticos mal configurados.",
-                inline=False
-            )
-
-        if webhooks_info:
-            embed.add_field(
-                name="🪝 Webhooks detectados",
-                value="\n".join(f"• {w}" for w in webhooks_info)[:1024],
-                inline=False
-            )
-        else:
-            embed.add_field(
-                name="🪝 Webhooks detectados",
-                value="ℹ️ No se han encontrado webhooks o no se pudieron listar.",
-                inline=False
-            )
-
-        if invites_info:
-            embed.add_field(
-                name="🔗 Invitaciones potencialmente peligrosas",
-                value="\n".join(f"• {i}" for i in invites_info)[:1024],
-                inline=False
-            )
-        else:
-            embed.add_field(
-                name="🔗 Invitaciones potencialmente peligrosas",
-                value="✅ No se han detectado invitaciones permanentes sin límite.",
-                inline=False
-            )
-
-        recomendaciones = []
-
-        if critical_roles:
-            recomendaciones.append("• Revisa los roles **muy peligrosos** y limita quién los tiene.")
-        if bots_dangerous:
-            recomendaciones.append("• Baja de posición o quita permisos a los **bots peligrosos**.")
-        if risky_channels:
-            recomendaciones.append("• Ajusta permisos en los canales marcados como peligrosos.")
-        if invites_info:
-            recomendaciones.append("• Elimina invitaciones permanentes que no sean necesarias.")
-
-        if not recomendaciones:
-            recomendaciones.append("• La configuración actual parece razonablemente segura.")
-
-        embed.add_field(
-            name="🛠️ Recomendaciones",
-            value="\n".join(recomendaciones)[:1024],
-            inline=False
-        )
-
-        embed.set_footer(text=f"Análisis completado en {guild.name}.")
-
-        analysis_data = {
-            "roles": role_analysis,
-            "critical_roles": [r.id for r in critical_roles],
-            "dangerous_roles": [r.id for r in dangerous_roles],
-            "bots_dangerous": [(m.id, s) for m, s in bots_dangerous],
-            "users_dangerous": [(m.id, s) for m, s in users_dangerous],
-        }
-
-        return embed, analysis_data
+        return embed, role_analysis
 
     # ============================
-    # COMANDO PRINCIPAL
+    # COMANDO PRINCIPAL (ARREGLADO)
     # ============================
 
     @app_commands.command(
         name="securityscan",
-        description="Super análisis de seguridad del servidor: roles, bots, usuarios, canales y más."
+        description="Analiza la seguridad del servidor actual."
     )
     async def securityscan(self, interaction: discord.Interaction):
+
         if not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message(
                 "❌ Solo administradores pueden usar este comando.",
                 ephemeral=True
             )
 
+        # Respuesta inmediata para evitar interacción fallida
+        await interaction.response.send_message(
+            "🔍 Analizando la seguridad del servidor...",
+            ephemeral=True
+        )
+
         embed, analysis_data = await self.build_security_embed(interaction.guild)
+
         view = SecurityScanView(self, interaction, analysis_data)
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+        await interaction.edit_original_response(
+            content=None,
+            embed=embed,
+            view=view
+        )
 
 
 async def setup(bot):
-    await bot.add_cog(SecurityScan(bot))
+    await bot.add_cog(SecurityScan(bot)) 
