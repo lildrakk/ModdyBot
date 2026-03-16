@@ -38,35 +38,45 @@ def sanitize_panel_id(panel_id: str) -> str:
     return panel_id.strip().replace(" ", "_")
 
 # ============================
-# CAPTCHA LIMPIO
+# CAPTCHA ESTILO BLUECAT
 # ============================
 
 def generar_captcha():
     letras = string.ascii_uppercase + string.digits
     codigo = ''.join(random.choice(letras) for _ in range(6))
 
-    width, height = 400, 150
-    img = Image.new("RGB", (width, height), (25, 25, 25))
+    width, height = 500, 200
+    img = Image.new("RGB", (width, height), (20, 20, 20))
     draw = ImageDraw.Draw(img)
 
+    # Fuente estilo BlueCat (Playfair Display Black)
     try:
-        font = ImageFont.truetype("arial.ttf", 80)
+        font = ImageFont.truetype("PlayfairDisplay-Black.ttf", 120)
     except:
         font = ImageFont.load_default()
 
+    # Medir texto
     bbox = draw.textbbox((0, 0), codigo, font=font)
     text_width = bbox[2] - bbox[0]
     text_height = bbox[3] - bbox[1]
 
     x = (width - text_width) // 2
-    y = (height - text_height) // 2
+    y = (height - text_height) // 2 - 10
 
+    # Texto blanco grande
     draw.text((x, y), codigo, font=font, fill=(255, 255, 255))
 
-    for _ in range(60):
-        px = random.randint(0, width - 1)
-        py = random.randint(0, height - 1)
-        img.putpixel((px, py), (random.randint(150, 255),) * 3)
+    # Pequeñas curvas ascendentes simuladas con líneas suaves
+    for i in range(len(codigo)):
+        char_x = x + (text_width / len(codigo)) * i + 10
+        curve_y = y + text_height - 10
+        draw.arc(
+            [char_x - 15, curve_y - 10, char_x + 15, curve_y + 20],
+            start=0,
+            end=180,
+            fill=(255, 255, 255),
+            width=4
+        )
 
     buffer = io.BytesIO()
     img.save(buffer, format="PNG")
@@ -89,7 +99,7 @@ class VerifyButtonItem(discord.ui.Button):
         self.panel_id = panel_id
 
     async def callback(self, interaction: discord.Interaction):
-        return  # Se maneja en on_interaction
+        return
 
 class VerifyButton(discord.ui.View):
     def __init__(self, panel_id, label):
@@ -104,11 +114,11 @@ class VerificationCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+        # Registrar views persistentes correctamente
         data = load_verification()
         for guild_id in data:
             for panel_id, cfg in data[guild_id].items():
                 label = cfg.get("boton", "Verificar")
-                # Registrar las views persistentes al arrancar
                 bot.add_view(VerifyButton(panel_id, label))
 
     # ============================
@@ -118,20 +128,6 @@ class VerificationCog(commands.Cog):
     @app_commands.command(
         name="verificacion",
         description="Crear un panel de verificación completo"
-    )
-    @app_commands.describe(
-        panel_id="ID único del panel",
-        canal="Canal donde se enviará el panel",
-        canal_logs="Canal donde se enviarán los logs de este panel",
-        titulo="Título del embed",
-        descripcion="Descripción del embed",
-        mensaje="Mensaje opcional debajo de la descripción",
-        imagen_url="URL opcional de imagen",
-        rol_dar="Rol que se dará al verificar",
-        rol_quitar="Rol que se quitará al verificar",
-        texto_boton="Texto del botón",
-        tipo="normal o captcha",
-        texto_captcha="Texto que aparecerá encima del captcha"
     )
     async def verificacion(
         self,
@@ -151,7 +147,60 @@ class VerificationCog(commands.Cog):
     ):
 
         if tipo not in ["normal", "captcha"]:
-            return await interaction.response.send_message("❌ Tipo inválido. Usa: normal o captcha", ephemeral=True)
+            return await interaction.response.send_message("❌ Tipo inválido.", ephemeral=True)
+
+        guild_id = str(interaction.guild.id)
+        data = load_verification()
+
+        if guild_id not in data:
+            data[guild_id] = {}
+
+        panel_id = sanitize_panel_id(panel_id)
+
+        data[guild_id][panel_id] = {
+            "rol_dar": rol_dar.id if rol_dar else None,
+            "rol_quitar": rol_quitar.id if rol_quitar else None,
+            "titulo": titulo,
+            "descripcion": descripcion,
+            "mensaje": mensaje,
+            "imagen": imagen_url,
+            "boton": texto_boton,
+            "tipo": tipo,
+            "captcha_texto": texto_captcha,
+            "canal_logs": canal_logs.id
+        }
+
+        save_verification in data[guild_id].items():
+                label = cfg.get("boton", "Verificar")
+                bot.add_view(VerifyButton(panel_id, label))
+
+    # ============================
+    # CREAR PANEL
+    # ============================
+
+    @app_commands.command(
+        name="verificacion",
+        description="Crear un panel de verificación completo"
+    )
+    async def verificacion(
+        self,
+        interaction: discord.Interaction,
+        panel_id: str,
+        canal: discord.TextChannel,
+        canal_logs: discord.TextChannel,
+        titulo: str,
+        descripcion: str,
+        mensaje: str = None,
+        imagen_url: str = None,
+        rol_dar: discord.Role = None,
+        rol_quitar: discord.Role = None,
+        texto_boton: str = "Verificar",
+        tipo: str = "normal",
+        texto_captcha: str = "Verifícate por seguridad del servidor"
+    ):
+
+        if tipo not in ["normal", "captcha"]:
+            return await interaction.response.send_message("❌ Tipo inválido.", ephemeral=True)
 
         guild_id = str(interaction.guild.id)
         data = load_verification()
@@ -250,14 +299,12 @@ class VerificationCog(commands.Cog):
         if not custom.startswith("verify_"):
             return
 
-        panel_id = custom.split("_", 1)[1]
-        panel_id = sanitize_panel_id(panel_id)
+        panel_id = sanitize_panel_id(custom.split("_", 1)[1])
 
         if not interaction.guild:
             return
 
         guild_id = str(interaction.guild.id)
-
         data = load_verification()
 
         if guild_id not in data or panel_id not in data[guild_id]:
@@ -268,7 +315,7 @@ class VerificationCog(commands.Cog):
         rol_dar = interaction.guild.get_role(cfg["rol_dar"]) if cfg.get("rol_dar") else None
         rol_quitar = interaction.guild.get_role(cfg["rol_quitar"]) if cfg.get("rol_quitar") else None
         tipo = cfg.get("tipo", "normal")
-        canal_logs = interaction.guild.get_channel(cfg.get("canal_logs")) if cfg.get("canal_logs") else None
+        canal_logs = interaction.guild.get_channel(cfg.get("canal_logs"))
 
         # Ya verificado
         if rol_dar and rol_dar in interaction.user.roles:
@@ -315,83 +362,42 @@ class VerificationCog(commands.Cog):
         file = discord.File(imagen, filename="captcha.png")
         embed.set_image(url="attachment://captcha.png")
 
-        select = discord.ui.Select(
-            placeholder="Selecciona una opción",
-            options=[discord.SelectOption(label="Responder", value="responder")]
-        )
+        class CaptchaModal(discord.ui.Modal, title="Verificación con Captcha"):
+            def __init__(self):
+                super().__init__()
+                self.input = discord.ui.TextInput(
+                    label="Introduce el código",
+                    placeholder="Escribe exactamente lo que ves",
+                    required=True
+                )
+                self.add_item(self.input)
 
-        async def select_callback(select_interaction: discord.Interaction):
-            if select_interaction.user.id != interaction.user.id:
-                return await select_interaction.response.send_message("❌ No puedes usar este menú.", ephemeral=True)
+            async def on_submit(self, modal_interaction: discord.Interaction):
+                if self.input.value == codigo:
+                    try:
+                        if rol_quitar:
+                            await modal_interaction.user.remove_roles(rol_quitar)
+                        if rol_dar:
+                            await modal_interaction.user.add_roles(rol_dar)
 
-            responder_btn = discord.ui.Button(
-                label="Responder",
-                style=discord.ButtonStyle.primary
-            )
+                        await modal_interaction.response.send_message("✅ Verificación completada.", ephemeral=True)
 
-            async def responder_callback(btn_interaction: discord.Interaction):
-                if btn_interaction.user.id != interaction.user.id:
-                    return await btn_interaction.response.send_message("❌ No puedes usar este botón.", ephemeral=True)
-
-                class CaptchaModal(discord.ui.Modal, title="Verificación con Captcha"):
-                    def __init__(self):
-                        super().__init__()
-                        self.input = discord.ui.TextInput(
-                            label="Introduce el código",
-                            placeholder="Escribe exactamente lo que ves",
-                            required=True
+                        await self_cog.enviar_log_verificacion(
+                            modal_interaction.user,
+                            modal_interaction.guild,
+                            canal_logs,
+                            rol_dado=rol_dar,
+                            rol_quitado=rol_quitar
                         )
-                        self.add_item(self.input)
 
-                    async def on_submit(self, modal_interaction: discord.Interaction):
-                        if self.input.value == codigo:
-                            try:
-                                if rol_quitar:
-                                    await modal_interaction.user.remove_roles(rol_quitar)
-                                if rol_dar:
-                                    await modal_interaction.user.add_roles(rol_dar)
+                    except:
+                        await modal_interaction.response.send_message("❌ No pude asignar los roles.", ephemeral=True)
+                else:
+                    await modal_interaction.response.send_message("❌ Código incorrecto.", ephemeral=True)
 
-                                await modal_interaction.response.send_message("✅ Verificación completada.", ephemeral=True)
+        self_cog = self
 
-                                self_cog = modal_interaction.client.get_cog("VerificationCog")
-                                if self_cog:
-                                    await self_cog.enviar_log_verificacion(
-                                        modal_interaction.user,
-                                        modal_interaction.guild,
-                                        canal_logs,
-                                        rol_dado=rol_dar,
-                                        rol_quitado=rol_quitar
-                                    )
-
-                            except:
-                                await modal_interaction.response.send_message("❌ No pude asignar los roles.", ephemeral=True)
-                        else:
-                            await modal_interaction.response.send_message("❌ Código incorrecto.", ephemeral=True)
-
-                await btn_interaction.response.send_modal(CaptchaModal())
-
-            responder_btn.callback = responder_callback
-
-            view2 = discord.ui.View()
-            view2.add_item(responder_btn)
-
-            await select_interaction.response.send_message(
-                "Pulsa **Responder** para escribir el código:",
-                view=view2,
-                ephemeral=True
-            )
-
-        select.callback = select_callback
-
-        view = discord.ui.View()
-        view.add_item(select)
-
-        await interaction.response.send_message(
-            embed=embed,
-            file=file,
-            view=view,
-            ephemeral=True
-        )
+        await interaction.response.send_modal(CaptchaModal())
 
     # ============================
     # LOG DE VERIFICACIÓN PRO
