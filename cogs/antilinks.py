@@ -7,24 +7,24 @@ from datetime import timedelta
 CONFIG_FILE = "antilinks.json"
 
 # ============================================================
-# CONFIG
+# CONFIG (GUARDADO SEGURO)
 # ============================================================
 
 def load_config():
     if not os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, "w") as f:
-            json.dump({}, f, indent=4)
         return {}
 
-    with open(CONFIG_FILE, "r") as f:
-        try:
+    try:
+        with open(CONFIG_FILE, "r") as f:
             return json.load(f)
-        except:
-            return {}
+    except:
+        return {}
 
 def save_config(data):
-    with open(CONFIG_FILE, "w") as f:
+    tmp = CONFIG_FILE + ".tmp"
+    with open(tmp, "w") as f:
         json.dump(data, f, indent=4)
+    os.replace(tmp, CONFIG_FILE)
 
 
 # ============================================================
@@ -49,12 +49,9 @@ class AntiLinks(commands.Cog):
                 "enabled": False,
                 "accion": "mute",
                 "mute_time": 600,
-
                 "allow_invites": False,
-
                 "whitelist_users": [],
                 "whitelist_roles": [],
-
                 "log_channel": None
             }
             save_config(self.config)
@@ -103,19 +100,19 @@ class AntiLinks(commands.Cog):
         guild = interaction.guild
         cfg = self.ensure_guild(guild.id)
 
-        if estado:
+        if estado is not None:
             cfg["enabled"] = (estado == "activar")
 
-        if accion:
+        if accion is not None:
             cfg["accion"] = accion
 
-        if mute_time:
+        if mute_time is not None:
             cfg["mute_time"] = max(1, mute_time)
 
-        if allow_invites:
+        if allow_invites is not None:
             cfg["allow_invites"] = (allow_invites == "si")
 
-        if log_channel:
+        if log_channel is not None:
             cfg["log_channel"] = log_channel.id
 
         save_config(self.config)
@@ -174,7 +171,7 @@ class AntiLinks(commands.Cog):
         cfg = self.ensure_guild(guild.id)
 
         class UserSelect(discord.ui.Select):
-            def __init__(self, parent):
+            def __init__(self, cog):
                 options = [
                     discord.SelectOption(label=m.name, value=str(m.id))
                     for m in guild.members if not m.bot
@@ -186,11 +183,11 @@ class AntiLinks(commands.Cog):
                     max_values=len(options),
                     options=options
                 )
-                self.parent = parent
+                self.cog = cog
 
             async def callback(self, i: discord.Interaction):
                 cfg["whitelist_users"] = [int(v) for v in self.values]
-                save_config(self.parent.config)
+                save_config(self.cog.config)
 
                 await i.response.send_message(
                     "✅ Whitelist de usuarios actualizada.",
@@ -219,7 +216,7 @@ class AntiLinks(commands.Cog):
         cfg = self.ensure_guild(guild.id)
 
         class RoleSelect(discord.ui.Select):
-            def __init__(self, parent):
+            def __init__(self, cog):
                 options = [
                     discord.SelectOption(label=r.name, value=str(r.id))
                     for r in guild.roles if r.name != "@everyone"
@@ -231,11 +228,11 @@ class AntiLinks(commands.Cog):
                     max_values=len(options),
                     options=options
                 )
-                self.parent = parent
+                self.cog = cog
 
             async def callback(self, i: discord.Interaction):
                 cfg["whitelist_roles"] = [int(v) for v in self.values]
-                save_config(self.parent.config)
+                save_config(self.cog.config)
 
                 await i.response.send_message(
                     "✅ Whitelist de roles actualizada.",
@@ -268,30 +265,24 @@ class AntiLinks(commands.Cog):
         if not cfg["enabled"]:
             return
 
-        # Whitelist usuarios
         if user.id in cfg["whitelist_users"]:
             return
 
-        # Whitelist roles
         if any(r.id in cfg["whitelist_roles"] for r in user.roles):
             return
 
-        # Permitir invites
         if cfg["allow_invites"]:
             if "discord.gg/" in content or "discord.com/invite/" in content:
                 return
 
-        # Detectar enlaces
         if not ("http://" in content or "https://" in content):
             return
 
-        # Borrar mensaje
         try:
             await message.delete()
         except:
             pass
 
-        # Registrar warn
         uid = user.id
         now = time.time()
 
@@ -300,12 +291,10 @@ class AntiLinks(commands.Cog):
 
         self.warns[uid].append(now)
 
-        # Limpiar warns viejos (5 minutos)
         self.warns[uid] = [t for t in self.warns[uid] if now - t <= 300]
 
         warn_count = len(self.warns[uid])
 
-        # Primer aviso
         if warn_count == 1:
             embed = discord.Embed(
                 title="⚠️ Enlace no permitido",
@@ -315,11 +304,10 @@ class AntiLinks(commands.Cog):
             await message.channel.send(embed=embed)
             return
 
-        # Segundo aviso → sanción
         await self.apply_action(message, cfg)
 
     # --------------------------------------------------------
-    # APLICAR SANCIÓN (ACTUALIZADO)
+    # APLICAR SANCIÓN (INTENTA → SI FALLA, AVISO)
     # --------------------------------------------------------
 
     async def apply_action(self, message: discord.Message, cfg):
@@ -329,7 +317,6 @@ class AntiLinks(commands.Cog):
 
         sancionado = False
 
-        # Intentar sancionar primero
         try:
             if action == "ban":
                 await guild.ban(user, reason="Anti‑Links")
@@ -345,7 +332,6 @@ class AntiLinks(commands.Cog):
         except:
             sancionado = False
 
-        # Si NO se pudo sancionar → embed amarillo
         if not sancionado:
             embed = discord.Embed(
                 title="⚠️ Enlace detectado",
@@ -358,7 +344,6 @@ class AntiLinks(commands.Cog):
             await message.channel.send(embed=embed)
             return
 
-        # Si SÍ se sancionó → embed rojo
         embed = discord.Embed(
             title="⛔ Sanción aplicada",
             description=f"Usuario: {user.mention}\nAcción: **{action}**\nRazón: Enviar enlaces no permitidos",
@@ -372,4 +357,4 @@ class AntiLinks(commands.Cog):
 # ============================================================
 
 async def setup(bot):
-    await bot.add_cog(AntiLinks(bot))
+    await bot.add_cog(AntiLinks(bot)) 
