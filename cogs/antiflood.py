@@ -210,7 +210,7 @@ class AntiFlood(commands.Cog):
             await self.apply_action(message, cfg)
 
     # --------------------------------------------------------
-    # APLICAR SANCIÓN
+    # APLICAR SANCIÓN (ACTUALIZADO)
     # --------------------------------------------------------
 
     async def apply_action(self, message: discord.Message, cfg):
@@ -218,37 +218,9 @@ class AntiFlood(commands.Cog):
         guild = message.guild
         action = cfg["accion"]
 
-        # Verificar permisos del BOT
-        missing = False
+        sancionado = False
 
-        if action == "ban" and not guild.me.guild_permissions.ban_members:
-            missing = True
-        if action == "kick" and not guild.me.guild_permissions.kick_members:
-            missing = True
-        if action == "mute" and not guild.me.guild_permissions.moderate_members:
-            missing = True
-
-        if missing:
-            embed = discord.Embed(
-                title="⚠️ Flood detectado",
-                description=(
-                    f"Detecté flood de {user.mention}.\n"
-                    f"Pero **no tengo permisos** para aplicar la acción configurada."
-                ),
-                color=discord.Color.yellow()
-            )
-            await message.channel.send(embed=embed)
-            return
-
-        # Sanción aplicada
-        embed = discord.Embed(
-            title="⛔ Sanción aplicada",
-            description=f"Usuario: {user.mention}\nAcción: **{action}**\nRazón: Flood",
-            color=discord.Color.red()
-        )
-        await message.channel.send(embed=embed)
-
-        # Ejecutar acción
+        # Intentar sancionar primero
         try:
             if action == "ban":
                 await guild.ban(user, reason="Flood")
@@ -260,8 +232,30 @@ class AntiFlood(commands.Cog):
                     discord.utils.utcnow() + timedelta(seconds=duration),
                     reason="Flood"
                 )
+            sancionado = True
         except:
-            pass
+            sancionado = False
+
+        # Si NO se pudo sancionar → embed amarillo
+        if not sancionado:
+            embed = discord.Embed(
+                title="⚠️ Flood detectado",
+                description=(
+                    f"Detecté flood de {user.mention}.\n"
+                    f"Pero **no he podido aplicar la acción configurada**."
+                ),
+                color=discord.Color.yellow()
+            )
+            await message.channel.send(embed=embed)
+            return
+
+        # Si SÍ se sancionó → embed rojo
+        embed = discord.Embed(
+            title="⛔ Sanción aplicada",
+            description=f"Usuario: {user.mention}\nAcción: **{action}**\nRazón: Flood",
+            color=discord.Color.red()
+        )
+        await message.channel.send(embed=embed)
 
 
 # ============================================================
