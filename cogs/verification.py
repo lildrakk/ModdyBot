@@ -124,6 +124,26 @@ class VerificationCog(commands.Cog):
         name="verificacion",
         description="Crear un panel de verificación completo"
     )
+    @app_commands.describe(
+        panel_id="ID único del panel",
+        canal="Canal donde se enviará el panel",
+        canal_logs="Canal donde se enviarán los logs",
+        titulo="Título del embed",
+        descripcion="Descripción del embed",
+        mensaje="Mensaje opcional",
+        imagen_url="Imagen opcional",
+        rol_dar="Rol que se dará",
+        rol_quitar="Rol que se quitará",
+        texto_boton="Texto del botón",
+        tipo="Tipo de verificación",
+        texto_captcha="Texto encima del captcha"
+    )
+    @app_commands.choices(
+        tipo=[
+            app_commands.Choice(name="Botón", value="normal"),
+            app_commands.Choice(name="Captcha", value="captcha")
+        ]
+    )
     async def verificacion(
         self,
         interaction: discord.Interaction,
@@ -137,12 +157,11 @@ class VerificationCog(commands.Cog):
         rol_dar: discord.Role = None,
         rol_quitar: discord.Role = None,
         texto_boton: str = "Verificar",
-        tipo: str = "normal",
+        tipo: app_commands.Choice[str] = None,
         texto_captcha: str = "Verifícate por seguridad del servidor"
     ):
 
-        if tipo not in ["normal", "captcha"]:
-            return await interaction.response.send_message("❌ Tipo inválido.", ephemeral=True)
+        tipo = tipo.value  # convertir Choice → string
 
         guild_id = str(interaction.guild.id)
         data = load_verification()
@@ -262,6 +281,10 @@ class VerificationCog(commands.Cog):
         if rol_dar and rol_dar in interaction.user.roles:
             return await interaction.response.send_message("✅ Ya estás verificado.", ephemeral=True)
 
+        # ============================
+        # VERIFICACIÓN NORMAL
+        # ============================
+
         if tipo == "normal":
             try:
                 if rol_quitar:
@@ -284,7 +307,10 @@ class VerificationCog(commands.Cog):
 
             return
 
-        # CAPTCHA
+        # ============================
+        # VERIFICACIÓN CON CAPTCHA (FLUJO ANTIGUO)
+        # ============================
+
         codigo, imagen = generar_captcha()
 
         embed = discord.Embed(
@@ -296,6 +322,36 @@ class VerificationCog(commands.Cog):
         file = discord.File(imagen, filename="captcha.png")
         embed.set_image(url="attachment://captcha.png")
 
+        # Botón "Responder"
+        class ResponderButton(discord.ui.View):
+            def __init__(self):
+                super().__init__(timeout=60)
+                self.add_item(discord.ui.Button(
+                    label="Responder",
+                    style=discord.ButtonStyle.primary,
+                    custom_id=f"captcha_reply_{panel_id}"
+                ))
+
+        await interaction.response.send_message(
+            embed=embed,
+            file=file,
+            view=ResponderButton(),
+            ephemeral=True
+        )
+
+        # Esperar al botón "Responder"
+        async def check(i: discord.Interaction):
+            return (
+                i.user.id == interaction.user.id and
+                i.data.get("custom_id") == f"captcha_reply_{panel_id}"
+            )
+
+        try:
+            second_interaction = await self.bot.wait_for("interaction", check=check, timeout=120)
+        except:
+            return
+
+        # Modal
         class CaptchaModal(discord.ui.Modal, title="Verificación con Captcha"):
             def __init__(self):
                 super().__init__()
@@ -330,8 +386,7 @@ class VerificationCog(commands.Cog):
                     await modal_interaction.response.send_message("❌ Código incorrecto.", ephemeral=True)
 
         self_cog = self
-
-        await interaction.response.send_modal(CaptchaModal())
+        await second_interaction.response.send_modal(CaptchaModal())
 
     # ============================
     # LOG DE VERIFICACIÓN
