@@ -49,13 +49,11 @@ def generar_captcha():
     img = Image.new("RGB", (width, height), (20, 20, 20))
     draw = ImageDraw.Draw(img)
 
-    # Fuente estilo BlueCat (Playfair Display Black)
     try:
         font = ImageFont.truetype("PlayfairDisplay-Black.ttf", 120)
     except:
         font = ImageFont.load_default()
 
-    # Medir texto
     bbox = draw.textbbox((0, 0), codigo, font=font)
     text_width = bbox[2] - bbox[0]
     text_height = bbox[3] - bbox[1]
@@ -63,10 +61,8 @@ def generar_captcha():
     x = (width - text_width) // 2
     y = (height - text_height) // 2 - 10
 
-    # Texto blanco grande
     draw.text((x, y), codigo, font=font, fill=(255, 255, 255))
 
-    # Pequeñas curvas ascendentes simuladas con líneas suaves
     for i in range(len(codigo)):
         char_x = x + (text_width / len(codigo)) * i + 10
         curve_y = y + text_height - 10
@@ -114,63 +110,9 @@ class VerificationCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-        # Registrar views persistentes correctamente
         data = load_verification()
         for guild_id in data:
             for panel_id, cfg in data[guild_id].items():
-                label = cfg.get("boton", "Verificar")
-                bot.add_view(VerifyButton(panel_id, label))
-
-    # ============================
-    # CREAR PANEL
-    # ============================
-
-    @app_commands.command(
-        name="verificacion",
-        description="Crear un panel de verificación completo"
-    )
-    async def verificacion(
-        self,
-        interaction: discord.Interaction,
-        panel_id: str,
-        canal: discord.TextChannel,
-        canal_logs: discord.TextChannel,
-        titulo: str,
-        descripcion: str,
-        mensaje: str = None,
-        imagen_url: str = None,
-        rol_dar: discord.Role = None,
-        rol_quitar: discord.Role = None,
-        texto_boton: str = "Verificar",
-        tipo: str = "normal",
-        texto_captcha: str = "Verifícate por seguridad del servidor"
-    ):
-
-        if tipo not in ["normal", "captcha"]:
-            return await interaction.response.send_message("❌ Tipo inválido.", ephemeral=True)
-
-        guild_id = str(interaction.guild.id)
-        data = load_verification()
-
-        if guild_id not in data:
-            data[guild_id] = {}
-
-        panel_id = sanitize_panel_id(panel_id)
-
-        data[guild_id][panel_id] = {
-            "rol_dar": rol_dar.id if rol_dar else None,
-            "rol_quitar": rol_quitar.id if rol_quitar else None,
-            "titulo": titulo,
-            "descripcion": descripcion,
-            "mensaje": mensaje,
-            "imagen": imagen_url,
-            "boton": texto_boton,
-            "tipo": tipo,
-            "captcha_texto": texto_captcha,
-            "canal_logs": canal_logs.id
-        }
-
-        save_verification in data[guild_id].items():
                 label = cfg.get("boton", "Verificar")
                 bot.add_view(VerifyButton(panel_id, label))
 
@@ -317,13 +259,8 @@ class VerificationCog(commands.Cog):
         tipo = cfg.get("tipo", "normal")
         canal_logs = interaction.guild.get_channel(cfg.get("canal_logs"))
 
-        # Ya verificado
         if rol_dar and rol_dar in interaction.user.roles:
             return await interaction.response.send_message("✅ Ya estás verificado.", ephemeral=True)
-
-        # ============================
-        # VERIFICACIÓN NORMAL
-        # ============================
 
         if tipo == "normal":
             try:
@@ -347,10 +284,7 @@ class VerificationCog(commands.Cog):
 
             return
 
-        # ============================
-        # VERIFICACIÓN CON CAPTCHA
-        # ============================
-
+        # CAPTCHA
         codigo, imagen = generar_captcha()
 
         embed = discord.Embed(
@@ -400,7 +334,7 @@ class VerificationCog(commands.Cog):
         await interaction.response.send_modal(CaptchaModal())
 
     # ============================
-    # LOG DE VERIFICACIÓN PRO
+    # LOG DE VERIFICACIÓN
     # ============================
 
     async def enviar_log_verificacion(self, usuario: discord.Member, guild: discord.Guild,
