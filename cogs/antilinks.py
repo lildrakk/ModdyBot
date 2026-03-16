@@ -268,10 +268,6 @@ class AntiLinks(commands.Cog):
         if not cfg["enabled"]:
             return
 
-        # No sancionar owner ni admins
-        if user == guild.owner or user.guild_permissions.administrator:
-            return
-
         # Whitelist usuarios
         if user.id in cfg["whitelist_users"]:
             return
@@ -323,7 +319,7 @@ class AntiLinks(commands.Cog):
         await self.apply_action(message, cfg)
 
     # --------------------------------------------------------
-    # APLICAR SANCIÓN
+    # APLICAR SANCIÓN (ACTUALIZADO)
     # --------------------------------------------------------
 
     async def apply_action(self, message: discord.Message, cfg):
@@ -331,37 +327,9 @@ class AntiLinks(commands.Cog):
         guild = message.guild
         action = cfg["accion"]
 
-        # Verificar permisos del BOT
-        missing = False
+        sancionado = False
 
-        if action == "ban" and not guild.me.guild_permissions.ban_members:
-            missing = True
-        if action == "kick" and not guild.me.guild_permissions.kick_members:
-            missing = True
-        if action == "mute" and not guild.me.guild_permissions.moderate_members:
-            missing = True
-
-        if missing:
-            embed = discord.Embed(
-                title="⚠️ Enlace detectado",
-                description=(
-                    f"Detecté un enlace prohibido de {user.mention}.\n"
-                    f"Pero **no tengo permisos** para aplicar la acción configurada."
-                ),
-                color=discord.Color.yellow()
-            )
-            await message.channel.send(embed=embed)
-            return
-
-        # Sanción aplicada
-        embed = discord.Embed(
-            title="⛔ Sanción aplicada",
-            description=f"Usuario: {user.mention}\nAcción: **{action}**\nRazón: Enviar enlaces no permitidos",
-            color=discord.Color.red()
-        )
-        await message.channel.send(embed=embed)
-
-        # Ejecutar acción
+        # Intentar sancionar primero
         try:
             if action == "ban":
                 await guild.ban(user, reason="Anti‑Links")
@@ -373,8 +341,30 @@ class AntiLinks(commands.Cog):
                     discord.utils.utcnow() + timedelta(seconds=duration),
                     reason="Anti‑Links"
                 )
+            sancionado = True
         except:
-            pass
+            sancionado = False
+
+        # Si NO se pudo sancionar → embed amarillo
+        if not sancionado:
+            embed = discord.Embed(
+                title="⚠️ Enlace detectado",
+                description=(
+                    f"Detecté un enlace prohibido de {user.mention}.\n"
+                    f"Pero **no he podido aplicar la acción configurada**."
+                ),
+                color=discord.Color.yellow()
+            )
+            await message.channel.send(embed=embed)
+            return
+
+        # Si SÍ se sancionó → embed rojo
+        embed = discord.Embed(
+            title="⛔ Sanción aplicada",
+            description=f"Usuario: {user.mention}\nAcción: **{action}**\nRazón: Enviar enlaces no permitidos",
+            color=discord.Color.red()
+        )
+        await message.channel.send(embed=embed)
 
 
 # ============================================================
@@ -382,4 +372,4 @@ class AntiLinks(commands.Cog):
 # ============================================================
 
 async def setup(bot):
-    await bot.add_cog(AntiLinks(bot)) 
+    await bot.add_cog(AntiLinks(bot))
