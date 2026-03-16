@@ -103,11 +103,9 @@ class AntiFlood(commands.Cog):
         guild = interaction.guild
         cfg = self.ensure_guild(guild.id)
 
-        # Estado
         if estado:
             cfg["enabled"] = (estado == "activar")
 
-        # Nivel
         if nivel:
             cfg["nivel"] = nivel
 
@@ -126,11 +124,9 @@ class AntiFlood(commands.Cog):
                 cfg["settings"]["max_messages"] = 3
                 cfg["settings"]["delete_count"] = 3
 
-        # Acción
         if accion:
             cfg["accion"] = accion
 
-        # Mute time
         if mute_time:
             cfg["mute_time"] = max(1, mute_time)
 
@@ -164,16 +160,11 @@ class AntiFlood(commands.Cog):
 
         guild = message.guild
         user = message.author
-
         cfg = self.ensure_guild(guild.id)
+        now = time.time()
+
         if not cfg["enabled"]:
             return
-
-        # No sancionar owner ni admins
-        if user == guild.owner or user.guild_permissions.administrator:
-            return
-
-        now = time.time()
 
         # Historial
         if user.id not in self.user_messages:
@@ -240,7 +231,10 @@ class AntiFlood(commands.Cog):
         if missing:
             embed = discord.Embed(
                 title="⚠️ Flood detectado",
-                description=f"Detecté flood de {user.mention}, pero **no tengo permisos** para aplicar la acción configurada.",
+                description=(
+                    f"Detecté flood de {user.mention}.\n"
+                    f"Pero **no tengo permisos** para aplicar la acción configurada."
+                ),
                 color=discord.Color.yellow()
             )
             await message.channel.send(embed=embed)
@@ -275,4 +269,4 @@ class AntiFlood(commands.Cog):
 # ============================================================
 
 async def setup(bot):
-    await bot.add_cog(AntiFlood(bot))
+    await bot.add_cog(AntiFlood(bot)) 
