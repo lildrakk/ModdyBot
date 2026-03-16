@@ -103,23 +103,18 @@ class AntiLinks(commands.Cog):
         guild = interaction.guild
         cfg = self.ensure_guild(guild.id)
 
-        # Estado
         if estado:
             cfg["enabled"] = (estado == "activar")
 
-        # Acción
         if accion:
             cfg["accion"] = accion
 
-        # Mute time
         if mute_time:
             cfg["mute_time"] = max(1, mute_time)
 
-        # Invites
         if allow_invites:
             cfg["allow_invites"] = (allow_invites == "si")
 
-        # Log channel
         if log_channel:
             cfg["log_channel"] = log_channel.id
 
@@ -265,14 +260,17 @@ class AntiLinks(commands.Cog):
         if message.author.bot or not message.guild:
             return
 
-        guild_id = str(message.guild.id)
-        cfg = self.ensure_guild(message.guild.id)
+        guild = message.guild
+        cfg = self.ensure_guild(guild.id)
+        user = message.author
+        content = message.content.lower()
 
         if not cfg["enabled"]:
             return
 
-        content = message.content.lower()
-        user = message.author
+        # No sancionar owner ni admins
+        if user == guild.owner or user.guild_permissions.administrator:
+            return
 
         # Whitelist usuarios
         if user.id in cfg["whitelist_users"]:
@@ -333,7 +331,7 @@ class AntiLinks(commands.Cog):
         guild = message.guild
         action = cfg["accion"]
 
-        # Verificar permisos
+        # Verificar permisos del BOT
         missing = False
 
         if action == "ban" and not guild.me.guild_permissions.ban_members:
@@ -346,7 +344,10 @@ class AntiLinks(commands.Cog):
         if missing:
             embed = discord.Embed(
                 title="⚠️ Enlace detectado",
-                description=f"Detecté un enlace prohibido de {user.mention}, pero **no tengo permisos** para aplicar la acción configurada.",
+                description=(
+                    f"Detecté un enlace prohibido de {user.mention}.\n"
+                    f"Pero **no tengo permisos** para aplicar la acción configurada."
+                ),
                 color=discord.Color.yellow()
             )
             await message.channel.send(embed=embed)
