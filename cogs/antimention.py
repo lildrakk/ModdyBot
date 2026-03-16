@@ -68,75 +68,61 @@ class AntiMention(commands.Cog):
         return self.config[gid]
 
     # ============================================================
-    # COMANDO PRINCIPAL /antimention
+    # COMANDO PRINCIPAL /antimention (SIN SELECTS)
     # ============================================================
 
     @app_commands.command(name="antimention", description="Configura el Anti‑Mention.")
     @app_commands.describe(
-        opcion="Qué quieres configurar",
-        valor="Valor a aplicar (si aplica)",
-        canal="Canal para logs (si aplica)"
-    )
-    @app_commands.choices(
-        opcion=[
-            app_commands.Choice(name="Activar", value="activar"),
-            app_commands.Choice(name="Desactivar", value="desactivar"),
-            app_commands.Choice(name="Acción", value="accion"),
-            app_commands.Choice(name="Límite usuarios", value="limit_users"),
-            app_commands.Choice(name="Límite roles", value="limit_roles"),
-            app_commands.Choice(name="Límite everyone", value="limit_everyone"),
-            app_commands.Choice(name="Cooldown", value="cooldown"),
-            app_commands.Choice(name="Logs", value="logs")
-        ]
+        activar="True/False para activar o desactivar",
+        accion="1=warn, 2=mute, 3=kick, 4=ban",
+        limite_usuarios="Límite de menciones a usuarios",
+        limite_roles="Límite de menciones a roles",
+        limite_everyone="0 o 1 para permitir @everyone",
+        cooldown="Cooldown entre detecciones",
+        logs="Canal de logs"
     )
     async def antimention_cmd(
         self,
         interaction: discord.Interaction,
-        opcion: app_commands.Choice[str],
-        valor: int = None,
-        canal: discord.TextChannel = None
+        activar: bool = None,
+        accion: int = None,
+        limite_usuarios: int = None,
+        limite_roles: int = None,
+        limite_everyone: int = None,
+        cooldown: int = None,
+        logs: discord.TextChannel = None
     ):
         guild = interaction.guild
         cfg = self.ensure_guild(guild.id)
 
-        op = opcion.value
-
         # Activar / desactivar
-        if op == "activar":
-            cfg["enabled"] = True
-
-        elif op == "desactivar":
-            cfg["enabled"] = False
+        if activar is not None:
+            cfg["enabled"] = activar
 
         # Acción
-        elif op == "accion":
-            if valor is None:
-                return await interaction.response.send_message("Debes indicar: 1=warn, 2=mute, 3=kick, 4=ban", ephemeral=True)
-
+        if accion is not None:
             acciones = {1: "warn", 2: "mute", 3: "kick", 4: "ban"}
-            if valor not in acciones:
-                return await interaction.response.send_message("Valor inválido.", ephemeral=True)
-
-            cfg["accion"] = acciones[valor]
+            if accion not in acciones:
+                return await interaction.response.send_message("Valor inválido para acción.", ephemeral=True)
+            cfg["accion"] = acciones[accion]
 
         # Límites
-        elif op in ["limit_users", "limit_roles", "limit_everyone"]:
-            if valor is None or valor < 1:
-                return await interaction.response.send_message("Debes indicar un número mayor a 0.", ephemeral=True)
+        if limite_usuarios is not None:
+            cfg["limit_users"] = max(1, limite_usuarios)
 
-            cfg[op] = valor
+        if limite_roles is not None:
+            cfg["limit_roles"] = max(1, limite_roles)
+
+        if limite_everyone is not None:
+            cfg["limit_everyone"] = max(0, limite_everyone)
 
         # Cooldown
-        elif op == "cooldown":
-            if valor is None or valor < 0:
-                return await interaction.response.send_message("Debes indicar un número válido.", ephemeral=True)
-            cfg["cooldown"] = valor
+        if cooldown is not None:
+            cfg["cooldown"] = max(0, cooldown)
 
         # Logs
-        elif op == "logs":
-            if canal is None:
-                return await interaction.response.send_message("Debes seleccionar un canal.", ephemeral=True)
-            cfg["logs"] = canal.id
+        if logs is not None:
+            cfg["logs"] = logs.id
 
         save_config(self.config)
 
@@ -144,99 +130,107 @@ class AntiMention(commands.Cog):
             title="🛡 Configuración Anti‑Mention actualizada",
             color=discord.Color.yellow()
         )
-        embed.add_field(name="Opción", value=op, inline=False)
         embed.add_field(name="Estado", value="🟢 Activado" if cfg["enabled"] else "🔴 Desactivado", inline=False)
+        embed.add_field(name="Acción", value=cfg["accion"], inline=False)
+        embed.add_field(name="Límite usuarios", value=cfg["limit_users"], inline=True)
+        embed.add_field(name="Límite roles", value=cfg["limit_roles"], inline=True)
+        embed.add_field(name="Límite everyone", value=cfg["limit_everyone"], inline=True)
+        embed.add_field(name="Cooldown", value=cfg["cooldown"], inline=True)
+        embed.add_field(name="Logs", value=f"<#{cfg['logs']}>" if cfg["logs"] else "Ninguno", inline=False)
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     # ============================================================
-    # WHITELIST
+    # COMANDO /antimention config (CON SELECTS)
     # ============================================================
 
-    @app_commands.command(name="antimention_whitelist", description="Gestiona la whitelist del Anti‑Mention.")
-    @app_commands.describe(
-        tipo="Tipo de whitelist",
-        objetivo="Usuario/Rol/Canal a añadir o quitar"
-    )
-    @app_commands.choices(
-        tipo=[
-            app_commands.Choice(name="Usuario", value="user"),
-            app_commands.Choice(name="Rol", value="role"),
-            app_commands.Choice(name="Canal", value="channel")
-        ]
-    )
-    async def whitelist_cmd(
-        self,
-        interaction: discord.Interaction,
-        tipo: app_commands.Choice[str],
-        objetivo
-    ):
+    @app_commands.command(name="antimention_config", description="Configura whitelist y blacklist del Anti‑Mention.")
+    async def antimention_config(self, interaction: discord.Interaction):
+
         guild = interaction.guild
         cfg = self.ensure_guild(guild.id)
 
-        t = tipo.value
+        # SELECT PARA WHITELIST / BLACKLIST
+        class ConfigSelect(discord.ui.Select):
+            def __init__(self):
+                options = [
+                    discord.SelectOption(label="Whitelist usuarios", value="w_users"),
+                    discord.SelectOption(label="Whitelist roles", value="w_roles"),
+                    discord.SelectOption(label="Whitelist canales", value="w_channels"),
+                    discord.SelectOption(label="Blacklist usuarios", value="b_users"),
+                    discord.SelectOption(label="Blacklist roles", value="b_roles"),
+                ]
+                super().__init__(placeholder="Selecciona qué quieres configurar", options=options)
 
-        if t == "user":
-            lista = cfg["whitelist_users"]
-        elif t == "role":
-            lista = cfg["whitelist_roles"]
-        else:
-            lista = cfg["whitelist_channels"]
+            async def callback(self, i: discord.Interaction):
+                tipo = self.values[0]
 
-        if objetivo.id in lista:
-            lista.remove(objetivo.id)
-            accion = "eliminado"
-        else:
-            lista.append(objetivo.id)
-            accion = "añadido"
+                if tipo == "w_users":
+                    lista = cfg["whitelist_users"]
+                    titulo = "Whitelist usuarios"
+                elif tipo == "w_roles":
+                    lista = cfg["whitelist_roles"]
+                    titulo = "Whitelist roles"
+                elif tipo == "w_channels":
+                    lista = cfg["whitelist_channels"]
+                    titulo = "Whitelist canales"
+                elif tipo == "b_users":
+                    lista = cfg["blocked_users"]
+                    titulo = "Blacklist usuarios"
+                else:
+                    lista = cfg["blocked_roles"]
+                    titulo = "Blacklist roles"
 
-        save_config(self.config)
+                # SELECT DE OBJETIVOS
+                class TargetSelect(discord.ui.Select):
+                    def __init__(self):
+                        opts = []
+
+                        if "users" in tipo:
+                            for m in guild.members[:25]:
+                                opts.append(discord.SelectOption(label=m.name, value=str(m.id)))
+                        elif "roles" in tipo:
+                            for r in guild.roles[:25]:
+                                opts.append(discord.SelectOption(label=r.name, value=str(r.id)))
+                        else:
+                            for c in guild.channels[:25]:
+                                if isinstance(c, discord.TextChannel):
+                                    opts.append(discord.SelectOption(label=c.name, value=str(c.id)))
+
+                        super().__init__(placeholder="Selecciona elementos", options=opts, min_values=1, max_values=1)
+
+                    async def callback(self, i2: discord.Interaction):
+                        target_id = int(self.values[0])
+
+                        if target_id in lista:
+                            lista.remove(target_id)
+                            accion = "eliminado"
+                        else:
+                            lista.append(target_id)
+                            accion = "añadido"
+
+                        save_config(self.config)
+
+                        await i2.response.send_message(
+                            f"✅ `{target_id}` {accion} en **{titulo}**.",
+                            ephemeral=True
+                        )
+
+                view2 = discord.ui.View()
+                view2.add_item(TargetSelect())
+
+                await i.response.send_message(
+                    f"Configurar **{titulo}**:",
+                    view=view2,
+                    ephemeral=True
+                )
+
+        view = discord.ui.View()
+        view.add_item(ConfigSelect())
 
         await interaction.response.send_message(
-            f"✅ {objetivo.id} {accion} en whitelist ({t}).",
-            ephemeral=True
-        )
-
-    # ============================================================
-    # BLOQUEO DE MENCIONES
-    # ============================================================
-
-    @app_commands.command(name="antimention_block", description="Bloquea usuarios o roles para que NO puedan ser mencionados.")
-    @app_commands.describe(
-        tipo="Usuario o rol",
-        objetivo="Usuario o rol a bloquear/desbloquear"
-    )
-    @app_commands.choices(
-        tipo=[
-            app_commands.Choice(name="Usuario", value="user"),
-            app_commands.Choice(name="Rol", value="role")
-        ]
-    )
-    async def block_cmd(
-        self,
-        interaction: discord.Interaction,
-        tipo: app_commands.Choice[str],
-        objetivo
-    ):
-        guild = interaction.guild
-        cfg = self.ensure_guild(guild.id)
-
-        if tipo.value == "user":
-            lista = cfg["blocked_users"]
-        else:
-            lista = cfg["blocked_roles"]
-
-        if objetivo.id in lista:
-            lista.remove(objetivo.id)
-            accion = "desbloqueado"
-        else:
-            lista.append(objetivo.id)
-            accion = "bloqueado"
-
-        save_config(self.config)
-
-        await interaction.response.send_message(
-            f"🚫 {objetivo.id} {accion} correctamente.",
+            "Selecciona qué deseas configurar:",
+            view=view,
             ephemeral=True
         )
 
@@ -293,61 +287,71 @@ class AntiMention(commands.Cog):
     # ============================================================
 
     async def apply_action(self, message: discord.Message, reason: str):
-        guild = message.guild
-        cfg = self.ensure_guild(guild.id)
-        user = message.author
-        action = cfg["accion"]
+    guild = message.guild
+    cfg = self.ensure_guild(guild.id)
+    user = message.author
+    action = cfg["accion"]
 
-        # Borrar mensaje del usuario
-        try:
-            await message.delete()
-        except:
-            pass
+    # Borrar mensaje del usuario
+    try:
+        await message.delete()
+    except:
+        pass
 
-        # Logs
-        if cfg["logs"]:
-            ch = guild.get_channel(cfg["logs"])
-            if ch:
-                embed = discord.Embed(
-                    title="📘 Log Anti‑Mention",
-                    description=f"Usuario: {user.mention}\nRazón: `{reason}`",
-                    color=discord.Color.blue()
-                )
-                await ch.send(embed=embed)
+    # ⚠️ AVISO AL USUARIO
+    aviso = discord.Embed(
+        title="⚠️ Mención no permitida",
+        description=f"{user.mention}, ese usuario/rol está **prohibido** ser mencionado.",
+        color=discord.Color.orange()
+    )
+    try:
+        await message.channel.send(user.mention, embed=aviso, delete_after=6)
+    except:
+        pass
 
-        # Intentar sanción
+    # Logs
+    if cfg["logs"]:
+        ch = guild.get_channel(cfg["logs"])
+        if ch:
+            embed = discord.Embed(
+                title="📘 Log Anti‑Mention",
+                description=f"Usuario: {user.mention}\nRazón: `{reason}`",
+                color=discord.Color.blue()
+            )
+            await ch.send(embed=embed)
+
+    # Intentar sanción
+    sancionado = False
+
+    try:
+        if action == "ban":
+            await guild.ban(user, reason=f"Anti‑Mention: {reason}")
+        elif action == "kick":
+            await guild.kick(user, reason=f"Anti‑Mention: {reason}")
+        elif action == "mute":
+            await user.timeout(
+                discord.utils.utcnow() + timedelta(seconds=cfg["mute_time"]),
+                reason=f"Anti‑Mention: {reason}"
+            )
+        sancionado = True
+    except:
         sancionado = False
 
-        try:
-            if action == "ban":
-                await guild.ban(user, reason=f"Anti‑Mention: {reason}")
-            elif action == "kick":
-                await guild.kick(user, reason=f"Anti‑Mention: {reason}")
-            elif action == "mute":
-                await user.timeout(
-                    discord.utils.utcnow() + timedelta(seconds=cfg["mute_time"]),
-                    reason=f"Anti‑Mention: {reason}"
-                )
-            sancionado = True
-        except:
-            sancionado = False
+    # Embed según resultado
+    if not sancionado:
+        embed = discord.Embed(
+            title="⚠️ No se pudo aplicar sanción",
+            description=f"Detecté abuso de menciones de {user.mention}, pero no tengo permisos.",
+            color=discord.Color.yellow()
+        )
+    else:
+        embed = discord.Embed(
+            title="⛔ Sanción aplicada",
+            description=f"Usuario: {user.mention}\nAcción: **{action}**\nRazón: {reason}",
+            color=discord.Color.red()
+        )
 
-        # Embed según resultado
-        if not sancionado:
-            embed = discord.Embed(
-                title="⚠️ No se pudo aplicar sanción",
-                description=f"Detecté abuso de menciones de {user.mention}, pero no tengo permisos.",
-                color=discord.Color.yellow()
-            )
-        else:
-            embed = discord.Embed(
-                title="⛔ Sanción aplicada",
-                description=f"Usuario: {user.mention}\nAcción: **{action}**\nRazón: {reason}",
-                color=discord.Color.red()
-            )
-
-        await message.channel.send(embed=embed)
-
+    await message.channel.send(embed=embed)
 
 # ============================================================
 # SETUP
