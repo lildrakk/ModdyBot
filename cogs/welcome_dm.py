@@ -98,11 +98,11 @@ class WelcomeDMCog(commands.Cog):
             f"<:anuncio:1483506577024614660> Actualmente somos **{guild.member_count} personas** formando parte de esta comunidad.\n"
             "Es un placer tenerte por aquí, de verdad.\n\n"
 
-            f"<:escudo:1483506514399334441> **¿Qué es ModdyBot?**\n"
+            f"<:moderacion:1483506627649994812> **¿Qué es ModdyBot?**\n"
             "**ModdyBot** es tu compañero de seguridad y organización dentro del servidor.\n"
             "Estoy aquí para ayudarte a tener una experiencia cómoda, segura y sin complicaciones.\n\n"
 
-            f"<:escudo:1483506514399334441> **ModdyBot te acompaña**\n"
+            f"<:moderacion:1483506627649994812> **ModdyBot te acompaña**\n"
             "Mi misión es mantener el servidor seguro, organizado y funcionando sin problemas.\n"
             "Si necesitas algo, no dudes en contactar con el staff.\n\n"
 
