@@ -38,12 +38,13 @@ class AntiLinks(commands.Cog):
         self.warns = {}  # user_id → warns
 
     # --------------------------------------------------------
-    # CONFIG POR SERVIDOR
+    # CONFIG POR SERVIDOR (CON AUTOFIX)
     # --------------------------------------------------------
 
     def ensure_guild(self, guild_id: int):
         gid = str(guild_id)
 
+        # Si no existe, crear config completa
         if gid not in self.config:
             self.config[gid] = {
                 "enabled": False,
@@ -56,7 +57,29 @@ class AntiLinks(commands.Cog):
             }
             save_config(self.config)
 
-        return self.config[gid]
+        # AUTOFIX: asegurar que todas las claves existen
+        cfg = self.config[gid]
+
+        if "accion" not in cfg:
+            cfg["accion"] = "mute"
+
+        if "mute_time" not in cfg:
+            cfg["mute_time"] = 600
+
+        if "allow_invites" not in cfg:
+            cfg["allow_invites"] = False
+
+        if "whitelist_users" not in cfg:
+            cfg["whitelist_users"] = []
+
+        if "whitelist_roles" not in cfg:
+            cfg["whitelist_roles"] = []
+
+        if "log_channel" not in cfg:
+            cfg["log_channel"] = None
+
+        save_config(self.config)
+        return cfg
 
     # --------------------------------------------------------
     # COMANDO /antilinks
@@ -307,7 +330,7 @@ class AntiLinks(commands.Cog):
         await self.apply_action(message, cfg)
 
     # --------------------------------------------------------
-    # APLICAR SANCIÓN (INTENTA → SI FALLA, AVISO)
+    # APLICAR SANCIÓN
     # --------------------------------------------------------
 
     async def apply_action(self, message: discord.Message, cfg):
