@@ -128,7 +128,7 @@ class WelcomeDMCog(commands.Cog):
             embed.set_thumbnail(url=guild.icon.url)
 
         # 🔵 AÑADIR GIF AQUÍ
-        embed.set_image(url="https://cdn.discordapp.com/attachments/1478441871712849962/1483477650763812945/standard.gif")
+        embed.set_image(url="https://cdn.discordapp.com/attachments/1478441871712849962/1483495094534541312/standard.gif?ex=69bacbf8&is=69b97a78&hm=e8d9eed8b2b776e498671e8951a8902899cec31636ff467d1b9c0254072e0d24&")
 
         try:
             await user.send(embed=embed)
@@ -197,7 +197,7 @@ class WelcomeDMCog(commands.Cog):
             embed.set_thumbnail(url=member.guild.icon.url)
 
         # 🔵 AÑADIR GIF AQUÍ TAMBIÉN
-        embed.set_image(url="https://cdn.discordapp.com/attachments/1478441871712849962/1483477650763812945/standard.gif")
+        embed.set_image(url="https://cdn.discordapp.com/attachments/1478441871712849962/1483495094534541312/standard.gif?ex=69bacbf8&is=69b97a78&hm=e8d9eed8b2b776e498671e8951a8902899cec31636ff467d1b9c0254072e0d24&")
 
         try:
             await member.send(embed=embed)
