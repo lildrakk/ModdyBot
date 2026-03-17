@@ -337,7 +337,7 @@ class AntiLinks(commands.Cog):
                 title="⚠️ Enlace detectado",
                 description=(
                     f"Detecté un enlace prohibido de {user.mention}.\n"
-                    f"Pero **no he podido aplicar la acción configurada**."
+                    f"Pero **no he podido aplicar la acción configurada porque no tengo permisos**."
                 ),
                 color=discord.Color.yellow()
             )
