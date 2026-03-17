@@ -242,7 +242,7 @@ class AntiFlood(commands.Cog):
                 title="⚠️ Flood detectado",
                 description=(
                     f"Detecté flood de {user.mention}.\n"
-                    f"Pero **no he podido aplicar la acción configurada**."
+                    f"Pero **no he podido aplicar la acción configurada por que no tengo permisos**."
                 ),
                 color=discord.Color.yellow()
             )
