@@ -141,7 +141,7 @@ class AntiLinks(commands.Cog):
         save_config(self.config)
 
         embed = discord.Embed(
-            title="<:link:1483506560935268452> Configuración Anti‑Links actualizada",
+            title="⚠️ Configuración Anti‑Links actualizada",
             color=discord.Color.yellow()
         )
 
@@ -173,7 +173,7 @@ class AntiLinks(commands.Cog):
             save_config(self.config)
 
         await interaction.response.send_message(
-            f"<:link:1483506560935268452> Usuario {user.mention} añadido a la whitelist.",
+            f"⚠️ Usuario {user.mention} añadido a la whitelist.",
             ephemeral=True
         )
 
@@ -193,7 +193,7 @@ class AntiLinks(commands.Cog):
             save_config(self.config)
 
         await interaction.response.send_message(
-            f"<:warn:1474968532113424425> Usuario {user.mention} eliminado de la whitelist.",
+            f"⚠️ Usuario {user.mention} eliminado de la whitelist.",
             ephemeral=True
         )
 
@@ -213,7 +213,7 @@ class AntiLinks(commands.Cog):
             save_config(self.config)
 
         await interaction.response.send_message(
-            f"<:link:1483506560935268452> Rol {rol.mention} añadido a la whitelist.",
+            f"⚠️ Rol {rol.mention} añadido a la whitelist.",
             ephemeral=True
         )
 
@@ -233,7 +233,7 @@ class AntiLinks(commands.Cog):
             save_config(self.config)
 
         await interaction.response.send_message(
-            f"<:warn:1474968532113424425> Rol {rol.mention} eliminado de la whitelist.",
+            f"⚠️ Rol {rol.mention} eliminado de la whitelist.",
             ephemeral=True
         )
 
@@ -291,7 +291,7 @@ class AntiLinks(commands.Cog):
         # Primer aviso
         if warn_count == 1:
             embed = discord.Embed(
-                title="<:warn:1474968532113424425> Enlace no permitido",
+                title="⚠️ Enlace no permitido",
                 description=(
                     f"{user.mention}, has enviado un enlace que **no está permitido**.\n"
                     f"Evita repetirlo o se aplicará una sanción."
@@ -334,7 +334,7 @@ class AntiLinks(commands.Cog):
         # No se pudo sancionar
         if not sancionado:
             embed = discord.Embed(
-                title="<:warn:1474968532113424425> Enlace detectado",
+                title="⚠️ Enlace detectado",
                 description=(
                     f"Detecté un enlace prohibido de {user.mention}, pero **no pude aplicar la sanción**."
                 ),
@@ -346,7 +346,7 @@ class AntiLinks(commands.Cog):
 
         # Sanción aplicada
         embed = discord.Embed(
-            title="<:advertencia:146979422371997299> Sanción aplicada",
+            title="⛔ Sanción aplicada",
             description=f"Usuario: {user.mention}\nAcción: **{action}**\nRazón: Enviar enlaces no permitidos",
             color=discord.Color.red()
         )
