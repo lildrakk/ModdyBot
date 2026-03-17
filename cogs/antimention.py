@@ -101,7 +101,10 @@ class AntiMention(commands.Cog):
         if accion is not None:
             acciones = {1: "warn", 2: "mute", 3: "kick", 4: "ban"}
             if accion not in acciones:
-                return await interaction.response.send_message("Valor inválido para acción.", ephemeral=True)
+                return await interaction.response.send_message(
+                    "<:warn:1483506607265419466> Valor inválido para acción.",
+                    ephemeral=True
+                )
             cfg["accion"] = acciones[accion]
 
         if limite_usuarios is not None:
@@ -122,10 +125,10 @@ class AntiMention(commands.Cog):
         save_config(self.config)
 
         embed = discord.Embed(
-            title="🛡 Configuración Anti‑Mention actualizada",
+            title="<:link:1483506560935268452> Configuración Anti‑Mention actualizada",
             color=discord.Color.yellow()
         )
-        embed.add_field(name="Estado", value="🟢 Activado" if cfg["enabled"] else "🔴 Desactivado", inline=False)
+        embed.add_field(name="Estado", value="Activado" if cfg["enabled"] else "Desactivado", inline=False)
         embed.add_field(name="Acción", value=cfg["accion"], inline=False)
         embed.add_field(name="Límite usuarios", value=cfg["limit_users"], inline=True)
         embed.add_field(name="Límite roles", value=cfg["limit_roles"], inline=True)
@@ -205,7 +208,7 @@ class AntiMention(commands.Cog):
                         save_config(self.config)
 
                         await i2.response.send_message(
-                            f"✅ `{target_id}` {accion} en **{titulo}**.",
+                            f"<:link:1483506560935268452> `{target_id}` {accion} en **{titulo}**.",
                             ephemeral=True
                         )
 
@@ -287,7 +290,7 @@ class AntiMention(commands.Cog):
             pass
 
         aviso = discord.Embed(
-            title="⚠️ Mención no permitida",
+            title="<:warn:1483506607265419466> Mención no permitida",
             description=f"{user.mention}, ese usuario/rol está **prohibido** ser mencionado.",
             color=discord.Color.orange()
         )
@@ -300,7 +303,7 @@ class AntiMention(commands.Cog):
             ch = guild.get_channel(cfg["logs"])
             if ch:
                 embed = discord.Embed(
-                    title="📘 Log Anti‑Mention",
+                    title="<:link:1483506560935268452> Log Anti‑Mention",
                     description=f"Usuario: {user.mention}\nRazón: `{reason}`",
                     color=discord.Color.blue()
                 )
@@ -324,13 +327,13 @@ class AntiMention(commands.Cog):
 
         if not sancionado:
             embed = discord.Embed(
-                title="⚠️ No se pudo aplicar sanción",
+                title="<:warn:1483506607265419466> No se pudo aplicar sanción",
                 description=f"Detecté abuso de menciones de {user.mention}, pero no tengo permisos.",
                 color=discord.Color.yellow()
             )
         else:
             embed = discord.Embed(
-                title="⛔ Sanción aplicada",
+                title="<:advertencia:1483506898509758690> Sanción aplicada",
                 description=f"Usuario: {user.mention}\nAcción: **{action}**\nRazón: {reason}",
                 color=discord.Color.red()
             )
@@ -342,4 +345,4 @@ class AntiMention(commands.Cog):
 # ============================================================
 
 async def setup(bot):
-    await bot.add_cog(AntiMention(bot)) 
+    await bot.add_cog(AntiMention(bot))
