@@ -9,20 +9,37 @@ from typing import Optional
 LOGS_FILE = "logs_config.json"
 
 # ============================
-# JSON SEGURO
+# JSON SEGURO + AUTOFIX
 # ============================
 
 def load_logs():
+    # Si no existe, crear archivo vacío
     if not os.path.exists(LOGS_FILE):
         with open(LOGS_FILE, "w") as f:
             json.dump({}, f, indent=4)
         return {}
 
+    # Cargar JSON
     try:
         with open(LOGS_FILE, "r") as f:
-            return json.load(f)
+            data = json.load(f)
     except:
-        return {}
+        data = {}
+
+    # AUTOFIX: asegurar que todos los servidores tengan categories
+    for gid, cfg in data.items():
+        if "categories" not in cfg:
+            cfg["categories"] = {
+                "joins": True,
+                "roles": True,
+                "canales": True,
+                "mensajes": True,
+                "servidor": True
+            }
+
+    save_logs(data)
+    return data
+
 
 def save_logs(data):
     with open(LOGS_FILE, "w") as f:
@@ -175,6 +192,17 @@ class UltraLogs(commands.Cog):
         if not cfg.get("enabled", False):
             return
 
+        # FIX: asegurar que categories existe
+        if "categories" not in cfg:
+            cfg["categories"] = {
+                "joins": True,
+                "roles": True,
+                "canales": True,
+                "mensajes": True,
+                "servidor": True
+            }
+            save_logs(self.logs)
+
         for cat, events in CATEGORIES.items():
             if event_key in events:
                 if not cfg["categories"].get(cat, True):
@@ -252,6 +280,7 @@ class UltraLogs(commands.Cog):
 
         gid = str(interaction.guild.id)
 
+        # FIX: asegurar estructura completa
         if gid not in self.logs:
             self.logs[gid] = {
                 "enabled": False,
@@ -266,6 +295,17 @@ class UltraLogs(commands.Cog):
             }
 
         cfg = self.logs[gid]
+
+        # FIX: si falta categories, añadirlo
+        if "categories" not in cfg:
+            cfg["categories"] = {
+                "joins": True,
+                "roles": True,
+                "canales": True,
+                "mensajes": True,
+                "servidor": True
+            }
+
         changed = []
 
         if estado is not None:
@@ -432,29 +472,53 @@ class UltraLogs(commands.Cog):
             despues_cat = after.category.name if after.category else "Ninguna"
             cambios.append(f"Categoría: `{antes_cat}` → `{despues_cat}`")
 
+        # Cambio de posición
+        if getattr(before, "position", None) != getattr(after, "position", None):
+            cambios.append(f"Posición: `{before.position}` → `{after.position}`")
+
+        # Permisos (solo si aplica)
+        try:
+            if before.overwrites != after.overwrites:
+                cambios.append("Permisos modificados")
+        except:
+            pass
+
         if not cambios:
             return
 
         embed = create_log_embed("channel_update", "Canal Actualizado", guild)
+
         embed.add_field(
             name="📺 Canal",
             value=f"{getattr(after, 'mention', '`Sin mención`')}\n`{after.name}`\nID: `{after.id}`",
             inline=False
         )
+
         embed.add_field(
             name="✏️ Cambios",
             value="\n".join(f"• {c}" for c in cambios)[:1024],
             inline=False
         )
+
         await self.send_log(guild, embed, "channel_update")
+
+    # ============================
+    # EVENTO: CAMBIOS DEL SERVIDOR
+    # ============================
 
     @commands.Cog.listener()
     async def on_guild_update(self, before: discord.Guild, after: discord.Guild):
         cambios = []
+
         if before.name != after.name:
             cambios.append(f"Nombre: `{before.name}` → `{after.name}`")
+
         if before.icon != after.icon:
             cambios.append("Icono del servidor cambiado")
+
+        if before.owner_id != after.owner_id:
+            cambios.append(f"Dueño del servidor: `<@{before.owner_id}>` → `<@{after.owner_id}>`")
+
         if before.premium_subscription_count != after.premium_subscription_count:
             cambios.append(
                 f"Boosts: `{before.premium_subscription_count}` → `{after.premium_subscription_count}`"
@@ -464,13 +528,15 @@ class UltraLogs(commands.Cog):
             return
 
         embed = create_log_embed("server_update", "Servidor Actualizado", after)
+
         embed.add_field(
             name="✏️ Cambios",
             value="\n".join(f"• {c}" for c in cambios)[:1024],
             inline=False
         )
+
         await self.send_log(after, embed, "server_update")
 
 
 async def setup(bot):
-    await bot.add_cog(UltraLogs(bot)) 
+    await bot.add_cog(UltraLogs(bot))
