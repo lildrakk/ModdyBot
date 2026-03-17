@@ -198,7 +198,7 @@ class AntiFlood(commands.Cog):
                 self.warned[user.id] = now
 
                 embed = discord.Embed(
-                    title="⚠️ Actividad sospechosa",
+                    title="⚠️ Flood Detectado",
                     description=f"{user.mention}, **estás enviando mensajes muy rápido**.\nReduce la velocidad o se aplicará una sanción.",
                     color=discord.Color.yellow()
                 )
