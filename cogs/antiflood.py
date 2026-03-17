@@ -199,7 +199,7 @@ class AntiFlood(commands.Cog):
 
                 embed = discord.Embed(
                     title="⚠️ Actividad sospechosa",
-                    description=f"{user.mention}, estás enviando mensajes **demasiado rápido**.\nReduce la velocidad o se aplicará una sanción.",
+                    description=f"{user.mention}, **estás enviando mensajes muy rápido**.\nReduce la velocidad o se aplicará una sanción.",
                     color=discord.Color.yellow()
                 )
 
