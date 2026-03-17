@@ -87,7 +87,7 @@ class AntiBots(commands.Cog):
         save_config(self.config)
 
         embed = discord.Embed(
-            title="🤖 Configuración Anti‑Bots actualizada",
+            title="<:alarma:1476336115354046607> Configuración Anti‑Bots actualizada",
             color=discord.Color.yellow()
         )
 
@@ -109,7 +109,7 @@ class AntiBots(commands.Cog):
         cfg = self.ensure_guild(guild.id)
 
         embed = discord.Embed(
-            title="🤖 Configuración actual del Anti‑Bots",
+            title="<:alarma:1476336115354046607> Configuración actual del Anti‑Bots",
             color=discord.Color.blue()
         )
 
@@ -130,11 +130,9 @@ class AntiBots(commands.Cog):
         if not cfg["enabled"]:
             return
 
-        # Solo actuar si es un bot
         if not member.bot:
             return
 
-        # Detectar si NO está verificado
         if not member.public_flags.verified_bot:
             await self.handle_unverified_bot(member, cfg)
 
@@ -173,27 +171,66 @@ class AntiBots(commands.Cog):
             except:
                 inviter_kicked = False
 
-        # Enviar logs
+        # --------------------------------------------------------
+        # LOGS PROFESIONALES
+        # --------------------------------------------------------
+
         log_channel_id = cfg["log_channel"]
         if log_channel_id:
             channel = guild.get_channel(log_channel_id)
             if channel:
-                if bot_kicked:
-                    desc = f"🤖 Bot no verificado expulsado: {bot_member.mention}"
-                else:
-                    desc = f"⚠️ No pude expulsar al bot no verificado: {bot_member.mention}"
-
-                if inviter:
-                    if inviter_kicked:
-                        desc += f"\n👤 Usuario expulsado: {inviter.mention}"
-                    else:
-                        desc += f"\n⚠️ No pude expulsar al usuario que lo metió: {inviter.mention}"
 
                 embed = discord.Embed(
-                    title="🚨 Anti‑Bots",
-                    description=desc,
+                    title="<:alarma:1476336115354046607> Anti‑Bots — Bot no verificado detectado",
                     color=discord.Color.red() if bot_kicked else discord.Color.yellow()
                 )
+
+                embed.add_field(name="Bot detectado", value=f"{bot_member.mention}\nID: `{bot_member.id}`", inline=False)
+
+                if inviter:
+                    embed.add_field(
+                        name="Invitado por",
+                        value=f"{inviter.mention}\nID: `{inviter.id}`",
+                        inline=False
+                    )
+                else:
+                    embed.add_field(
+                        name="Invitado por",
+                        value="No se pudo determinar",
+                        inline=False
+                    )
+
+                # Resultado sobre el bot
+                if bot_kicked:
+                    embed.add_field(
+                        name="Acción sobre el bot",
+                        value=f"<:alarma:1476336115354046607> Expulsado correctamente",
+                        inline=False
+                    )
+                else:
+                    embed.add_field(
+                        name="Acción sobre el bot",
+                        value=f"<:alarma:1476336115354046607> No se pudo expulsar",
+                        inline=False
+                    )
+
+                # Resultado sobre el usuario
+                if inviter:
+                    if inviter_kicked:
+                        embed.add_field(
+                            name="Acción sobre el usuario",
+                            value=f"<:advertencia:1483506898509758690> Usuario expulsado por meter un bot no verificado",
+                            inline=False
+                        )
+                    else:
+                        embed.add_field(
+                            name="Acción sobre el usuario",
+                            value=f"<:alarma:1476336115354046607> No se pudo expulsar al usuario",
+                            inline=False
+                        )
+
+                embed.set_footer(text="Sistema Anti‑Bots PRO — Seguridad automática")
+
                 await channel.send(embed=embed)
 
 
