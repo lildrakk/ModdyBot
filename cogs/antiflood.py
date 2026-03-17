@@ -133,11 +133,11 @@ class AntiFlood(commands.Cog):
         save_config(self.config)
 
         embed = discord.Embed(
-            title="🛡 Configuración Anti‑Flood actualizada",
+            title="<:warn:1483506607265419466> Configuración Anti‑Flood actualizada",
             color=discord.Color.yellow()
         )
 
-        embed.add_field(name="Estado", value="🟢 Activado" if cfg["enabled"] else "🔴 Desactivado", inline=False)
+        embed.add_field(name="Estado", value="Activado" if cfg["enabled"] else "Desactivado", inline=False)
         embed.add_field(name="Nivel", value=cfg["nivel"].capitalize(), inline=True)
         embed.add_field(name="Acción", value=cfg["accion"].capitalize(), inline=True)
         embed.add_field(name="Mute time", value=f"{cfg['mute_time']}s", inline=True)
@@ -198,7 +198,7 @@ class AntiFlood(commands.Cog):
                 self.warned[user.id] = now
 
                 embed = discord.Embed(
-                    title="⚠️ Aviso De Flood ",
+                    title="<:warn:1483506607265419466> Aviso de Flood",
                     description=f"{user.mention}, **estás enviando mensajes muy rápido**.\nReduce la velocidad o se aplicará una sanción.",
                     color=discord.Color.yellow()
                 )
@@ -210,7 +210,7 @@ class AntiFlood(commands.Cog):
             await self.apply_action(message, cfg)
 
     # --------------------------------------------------------
-    # APLICAR SANCIÓN (ACTUALIZADO)
+    # APLICAR SANCIÓN
     # --------------------------------------------------------
 
     async def apply_action(self, message: discord.Message, cfg):
@@ -236,22 +236,22 @@ class AntiFlood(commands.Cog):
         except:
             sancionado = False
 
-        # Si NO se pudo sancionar → embed amarillo
+        # Si NO se pudo sancionar → aviso (WARN)
         if not sancionado:
             embed = discord.Embed(
-                title="⚠️ Flood detectado",
+                title="<:warn:1483506607265419466> Flood detectado",
                 description=(
                     f"Detecté flood de {user.mention}.\n"
-                    f"Pero **no he podido aplicar la acción configurada por que no tengo permisos**."
+                    f"Pero **no he podido aplicar la acción configurada porque no tengo permisos**."
                 ),
                 color=discord.Color.yellow()
             )
             await message.channel.send(embed=embed)
             return
 
-        # Si SÍ se sancionó → embed rojo
+        # Si SÍ se sancionó → advertencia fuerte (SANCIÓN)
         embed = discord.Embed(
-            title="⛔ Sanción aplicada",
+            title="<:advertencia:1483506898509758690> Sanción aplicada",
             description=f"Usuario: {user.mention}\nAcción: **{action}**\nRazón: Flood",
             color=discord.Color.red()
         )
@@ -263,4 +263,4 @@ class AntiFlood(commands.Cog):
 # ============================================================
 
 async def setup(bot):
-    await bot.add_cog(AntiFlood(bot)) 
+    await bot.add_cog(AntiFlood(bot))
