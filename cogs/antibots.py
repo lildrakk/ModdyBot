@@ -87,7 +87,7 @@ class AntiBots(commands.Cog):
         save_config(self.config)
 
         embed = discord.Embed(
-            title="<:alarma:1476336115354046607> Configuración Anti‑Bots actualizada",
+            title="⚠️ Configuración Anti‑Bots actualizada",
             color=discord.Color.yellow()
         )
 
@@ -109,7 +109,7 @@ class AntiBots(commands.Cog):
         cfg = self.ensure_guild(guild.id)
 
         embed = discord.Embed(
-            title="<:alarma:1476336115354046607> Configuración actual del Anti‑Bots",
+            title="⚠️ Configuración actual del Anti‑Bots",
             color=discord.Color.blue()
         )
 
@@ -181,7 +181,7 @@ class AntiBots(commands.Cog):
             if channel:
 
                 embed = discord.Embed(
-                    title="<:alarma:1476336115354046607> Anti‑Bots — Bot no verificado detectado",
+                    title="⚠️ Anti‑Bots — Bot no verificado detectado",
                     color=discord.Color.red() if bot_kicked else discord.Color.yellow()
                 )
 
@@ -204,13 +204,13 @@ class AntiBots(commands.Cog):
                 if bot_kicked:
                     embed.add_field(
                         name="Acción sobre el bot",
-                        value=f"<:alarma:1476336115354046607> Expulsado correctamente",
+                        value="⛔ Bot expulsado correctamente",
                         inline=False
                     )
                 else:
                     embed.add_field(
                         name="Acción sobre el bot",
-                        value=f"<:alarma:1476336115354046607> No se pudo expulsar",
+                        value="⚠️ No se pudo expulsar al bot",
                         inline=False
                     )
 
@@ -219,13 +219,13 @@ class AntiBots(commands.Cog):
                     if inviter_kicked:
                         embed.add_field(
                             name="Acción sobre el usuario",
-                            value=f"<:advertencia:1483506898509758690> Usuario expulsado por meter un bot no verificado",
+                            value="⛔ Usuario expulsado por meter un bot no verificado",
                             inline=False
                         )
                     else:
                         embed.add_field(
                             name="Acción sobre el usuario",
-                            value=f"<:alarma:1476336115354046607> No se pudo expulsar al usuario",
+                            value="⚠️ No se pudo expulsar al usuario",
                             inline=False
                         )
 
