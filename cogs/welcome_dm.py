@@ -127,6 +127,9 @@ class WelcomeDMCog(commands.Cog):
         if guild.icon:
             embed.set_thumbnail(url=guild.icon.url)
 
+        # 🔵 AÑADIR GIF AQUÍ
+        embed.set_image(url="https://cdn.discordapp.com/attachments/1478441871712849962/1483477650763812945/standard.gif")
+
         try:
             await user.send(embed=embed)
             await interaction.response.send_message(
@@ -193,6 +196,9 @@ class WelcomeDMCog(commands.Cog):
         if member.guild.icon:
             embed.set_thumbnail(url=member.guild.icon.url)
 
+        # 🔵 AÑADIR GIF AQUÍ TAMBIÉN
+        embed.set_image(url="https://cdn.discordapp.com/attachments/1478441871712849962/1483477650763812945/standard.gif")
+
         try:
             await member.send(embed=embed)
         except:
@@ -200,4 +206,4 @@ class WelcomeDMCog(commands.Cog):
 
 
 async def setup(bot):
-    await bot.add_cog(WelcomeDMCog(bot)) 
+    await bot.add_cog(WelcomeDMCog(bot))
