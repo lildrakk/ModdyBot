@@ -38,7 +38,7 @@ def sanitize_panel_id(panel_id: str) -> str:
     return panel_id.strip().replace(" ", "_")
 
 # ============================
-# CAPTCHA ARREGLADO
+# CAPTCHA
 # ============================
 
 def generar_captcha():
@@ -113,6 +113,12 @@ class VerificationCog(commands.Cog):
         name="verificacion",
         description="Crear un panel de verificación completo"
     )
+    @app_commands.choices(
+        tipo=[
+            app_commands.Choice(name="Botón", value="normal"),
+            app_commands.Choice(name="Captcha", value="captcha")
+        ]
+    )
     async def verificacion(
         self,
         interaction: discord.Interaction,
@@ -130,7 +136,7 @@ class VerificationCog(commands.Cog):
         texto_captcha: str = "Verifícate por seguridad del servidor"
     ):
 
-        tipo = tipo.value
+        tipo = tipo.value if tipo else "normal"
         guild_id = str(interaction.guild.id)
         data = load_verification()
 
