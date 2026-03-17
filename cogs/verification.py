@@ -49,7 +49,6 @@ def generar_captcha():
     img = Image.new("RGB", (width, height), (20, 20, 20))
     draw = ImageDraw.Draw(img)
 
-    # Fuente que SIEMPRE existe en cualquier hosting
     try:
         font = ImageFont.truetype("DejaVuSans-Bold.ttf", 120)
     except:
@@ -78,7 +77,7 @@ class VerifyButtonItem(discord.ui.Button):
     def __init__(self, panel_id, label):
         super().__init__(
             label=label,
-            emoji="🔐",
+            emoji="<:shield:1000008818>",
             style=discord.ButtonStyle.success,
             custom_id=f"verify_{panel_id}"
         )
@@ -100,6 +99,7 @@ class VerificationCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+        # Cargar panels guardados y reconstruir botones
         data = load_verification()
         for guild_id in data:
             for panel_id, cfg in data[guild_id].items():
@@ -191,7 +191,7 @@ class VerificationCog(commands.Cog):
         view = VerifyButton(panel_id, texto_boton)
 
         await canal.send(embed=embed, view=view)
-        await interaction.response.send_message("✅ Panel creado correctamente.", ephemeral=True)
+        await interaction.response.send_message("<:check:1000011237> Panel creado correctamente.", ephemeral=True)
 
     # ============================
     # ENVIAR PANEL EXISTENTE
@@ -214,7 +214,7 @@ class VerificationCog(commands.Cog):
         panel_id = sanitize_panel_id(panel_id)
 
         if guild_id not in data or panel_id not in data[guild_id]:
-            return await interaction.response.send_message("❌ Ese panel no existe.", ephemeral=True)
+            return await interaction.response.send_message("<:error:1000011241> Ese panel no existe.", ephemeral=True)
 
         cfg = data[guild_id][panel_id]
 
@@ -234,7 +234,7 @@ class VerificationCog(commands.Cog):
         view = VerifyButton(panel_id, boton)
 
         await canal.send(embed=embed, view=view)
-        await interaction.response.send_message("✅ Panel enviado correctamente.", ephemeral=True)
+        await interaction.response.send_message("<:check:1000011237> Panel enviado correctamente.", ephemeral=True)
 
     # ============================
     # INTERACCIÓN DEL BOTÓN
@@ -259,7 +259,7 @@ class VerificationCog(commands.Cog):
         data = load_verification()
 
         if guild_id not in data or panel_id not in data[guild_id]:
-            return await interaction.response.send_message("❌ Panel no encontrado.", ephemeral=True)
+            return await interaction.response.send_message("<:error:1000011241> Panel no encontrado.", ephemeral=True)
 
         cfg = data[guild_id][panel_id]
 
@@ -269,7 +269,7 @@ class VerificationCog(commands.Cog):
         canal_logs = interaction.guild.get_channel(cfg.get("canal_logs"))
 
         if rol_dar and rol_dar in interaction.user.roles:
-            return await interaction.response.send_message("✅ Ya estás verificado.", ephemeral=True)
+            return await interaction.response.send_message("<:check:1000011237> Ya estás verificado.", ephemeral=True)
 
         # ============================
         # VERIFICACIÓN NORMAL
@@ -282,7 +282,7 @@ class VerificationCog(commands.Cog):
                 if rol_dar:
                     await interaction.user.add_roles(rol_dar)
 
-                await interaction.response.send_message("✅ Verificación completada.", ephemeral=True)
+                await interaction.response.send_message("<:check:1000011237> Verificación completada.", ephemeral=True)
 
                 await self.enviar_log_verificacion(
                     interaction.user,
@@ -293,18 +293,18 @@ class VerificationCog(commands.Cog):
                 )
 
             except:
-                return await interaction.response.send_message("❌ No pude asignar los roles.", ephemeral=True)
+                return await interaction.response.send_message("<:error:1000011241> No pude asignar los roles.", ephemeral=True)
 
             return
 
         # ============================
-        # VERIFICACIÓN CON CAPTCHA (ARREGLADA)
+        # VERIFICACIÓN CON CAPTCHA
         # ============================
 
         codigo, imagen = generar_captcha()
 
         embed = discord.Embed(
-            title="🔐 Verificación con Captcha",
+            title="<:shield:1000008818> Verificación con Captcha",
             description=cfg.get("captcha_texto", "Verifícate por seguridad del servidor"),
             color=discord.Color.blue()
         )
@@ -348,7 +348,7 @@ class VerificationCog(commands.Cog):
                                     await modal_interaction.user.add_roles(rol_dar)
 
                                 await modal_interaction.response.send_message(
-                                    "✅ Verificación completada.",
+                                    "<:check:1000011237> Verificación completada.",
                                     ephemeral=True
                                 )
 
@@ -362,12 +362,12 @@ class VerificationCog(commands.Cog):
 
                             except:
                                 await modal_interaction.response.send_message(
-                                    "❌ No pude asignar los roles.",
+                                    "<:error:1000011241> No pude asignar los roles.",
                                     ephemeral=True
                                 )
                         else:
                             await modal_interaction.response.send_message(
-                                "❌ Código incorrecto.",
+                                "<:error:1000011241> Código incorrecto.",
                                 ephemeral=True
                             )
 
@@ -392,7 +392,7 @@ class VerificationCog(commands.Cog):
             return
 
         embed = discord.Embed(
-            title="✅ Usuario Verificado",
+            title="<:check:1000011237> Usuario Verificado",
             color=discord.Color.green()
         )
 
@@ -421,4 +421,4 @@ class VerificationCog(commands.Cog):
 # ============================
 
 async def setup(bot):
-    await bot.add_cog(VerificationCog(bot)) 
+    await bot.add_cog(VerificationCog(bot))
