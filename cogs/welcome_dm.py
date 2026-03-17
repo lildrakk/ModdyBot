@@ -39,25 +39,27 @@ class WelcomeDMCog(commands.Cog):
         self.dm_config = load_dm()
 
     # ============================
-    # /dmwelcome
+    # /dmwelcome (ACTIVAR / DESACTIVAR)
     # ============================
 
     @app_commands.command(
         name="dmwelcome",
         description="Activa o desactiva la bienvenida por DM"
     )
-    async def dmwelcome(self, interaction: discord.Interaction, estado: str):
+    @app_commands.describe(
+        estado="activar / desactivar"
+    )
+    @app_commands.choices(
+        estado=[
+            app_commands.Choice(name="Activar", value="activar"),
+            app_commands.Choice(name="Desactivar", value="desactivar")
+        ]
+    )
+    async def dmwelcome(self, interaction: discord.Interaction, estado: app_commands.Choice[str]):
 
         if not interaction.user.guild_permissions.manage_guild:
             return await interaction.response.send_message(
-                "❌ No tienes permisos.",
-                ephemeral=True
-            )
-
-        estado = estado.lower()
-        if estado not in ["on", "off"]:
-            return await interaction.response.send_message(
-                "❌ Usa: on / off",
+                "❌ No tienes permisos para usar este comando.",
                 ephemeral=True
             )
 
@@ -67,11 +69,12 @@ class WelcomeDMCog(commands.Cog):
         if guild_id not in self.dm_config["servers"]:
             self.dm_config["servers"][guild_id] = {}
 
-        self.dm_config["servers"][guild_id]["enabled"] = (estado == "on")
+        activar = (estado.value == "activar")
+        self.dm_config["servers"][guild_id]["enabled"] = activar
         save_dm(self.dm_config)
 
         await interaction.response.send_message(
-            f"✅ Bienvenida por DM **{estado.upper()}**.",
+            f"📨 Bienvenida por DM **{estado.name.upper()}** correctamente.",
             ephemeral=True
         )
 
@@ -95,7 +98,7 @@ class WelcomeDMCog(commands.Cog):
             f"📊 Actualmente somos **{guild.member_count} personas** formando parte de esta comunidad.\n"
             "Es un placer tenerte por aquí, de verdad.\n\n"
 
-            "🤖 **¿Quién soy yo?**\n"
+            "🤖 **¿Qué es ModdyBot?**\n"
             "**ModdyBot** es tu compañero de seguridad y organización dentro del servidor.\n"
             "Estoy aquí para ayudarte a tener una experiencia cómoda, segura y sin complicaciones.\n\n"
 
@@ -161,7 +164,7 @@ class WelcomeDMCog(commands.Cog):
             f"📊 Actualmente somos **{member.guild.member_count} personas** formando parte de esta comunidad.\n"
             "Es un placer tenerte por aquí, de verdad.\n\n"
 
-            "🤖 **¿Quién soy yo?**\n"
+            "🤖 **¿Qué es ModdyBot?**\n"
             "**ModdyBot** es tu compañero de seguridad y organización dentro del servidor.\n"
             "Estoy aquí para ayudarte a tener una experiencia cómoda, segura y sin complicaciones.\n\n"
 
