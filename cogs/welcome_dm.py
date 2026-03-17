@@ -59,7 +59,7 @@ class WelcomeDMCog(commands.Cog):
 
         if not interaction.user.guild_permissions.manage_guild:
             return await interaction.response.send_message(
-                "<:error:1000011241> No tienes permisos para usar este comando.",
+                "<:X_:1476336151835967640> No tienes permisos para usar este comando.",
                 ephemeral=True
             )
 
@@ -74,7 +74,7 @@ class WelcomeDMCog(commands.Cog):
         save_dm(self.dm_config)
 
         await interaction.response.send_message(
-            f"<:check:1000011237> Bienvenida por DM **{estado.name.upper()}** correctamente.",
+            f"<:check:1476336175114354891> Bienvenida por DM **{estado.name.upper()}** correctamente.",
             ephemeral=True
         )
 
@@ -92,33 +92,33 @@ class WelcomeDMCog(commands.Cog):
         user = interaction.user
 
         descripcion = (
-            f"<:gift:1000008822> **¡Hey {user.name}!**\n"
-            f"Te doy la bienvenida a **{guild.name}** ✨\n\n"
+            f"<:regalo:1483506548495093957> **¡Hey {user.name}!**\n"
+            f"Te doy la bienvenida a **{guild.name}** <:tada:148351096085663344>\n\n"
 
-            f"<:announce:1000008820> Actualmente somos **{guild.member_count} personas** formando parte de esta comunidad.\n"
+            f"<:anuncio:1483506577024614660> Actualmente somos **{guild.member_count} personas** formando parte de esta comunidad.\n"
             "Es un placer tenerte por aquí, de verdad.\n\n"
 
-            f"<:shield:1000008818> **¿Qué es ModdyBot?**\n"
+            f"<:escudo:1483506514399334441> **¿Qué es ModdyBot?**\n"
             "**ModdyBot** es tu compañero de seguridad y organización dentro del servidor.\n"
             "Estoy aquí para ayudarte a tener una experiencia cómoda, segura y sin complicaciones.\n\n"
 
-            f"<:shield:1000008818> **ModdyBot te acompaña**\n"
+            f"<:escudo:1483506514399334441> **ModdyBot te acompaña**\n"
             "Mi misión es mantener el servidor seguro, organizado y funcionando sin problemas.\n"
             "Si necesitas algo, no dudes en contactar con el staff.\n\n"
 
-            f"<:warning:1000008817> **Consejos para empezar**\n"
+            f"<:regalo:1483506548495093957> **Consejos para empezar**\n"
             "• Échale un vistazo a las normas del servidor 📜\n"
             "• Respeta a los demás miembros 🤝\n"
             "• Y sobre todo… ¡pásalo bien! 😄\n\n"
 
-            f"<:alert:1000011234> **¿Necesitas ayuda?**\n"
+            f"<:anuncio:1483506577024614660> **¿Necesitas ayuda?**\n"
             "Puedes entrar a nuestro servidor oficial de soporte:\n"
             "[🔗 Servidor de soporte](https://discord.gg/u8W4jv7NXx)\n\n"
 
             "🚀 **¿Quieres usar ModdyBot en tus servidores?**\n"
             "[✨ Invitar ModdyBot](https://discord.com/oauth2/authorize?client_id=1450924184606740642&permissions=8&integration_type=0&scope=bot)\n\n"
 
-            f"<:check:1000011237> **¡Gracias por unirte!**\n"
+            f"<:check:1476336175114354891> **¡Gracias por unirte!**\n"
             "Estoy seguro de que encajarás genial aquí."
         )
 
@@ -132,12 +132,12 @@ class WelcomeDMCog(commands.Cog):
         try:
             await user.send(embed=embed)
             await interaction.response.send_message(
-                "<:check:1000011237> Te envié el mensaje de bienvenida por DM.",
+                "<:check:1476336175114354891> Te envié el mensaje de bienvenida por DM.",
                 ephemeral=True
             )
         except:
             await interaction.response.send_message(
-                "<:error:1000011241> No pude enviarte el DM. Puede que tengas los mensajes privados desactivados.",
+                "<:X_:1476336151835967640> No pude enviarte el DM. Puede que tengas los mensajes privados desactivados.",
                 ephemeral=True
             )
 
@@ -160,33 +160,33 @@ class WelcomeDMCog(commands.Cog):
             return
 
         descripcion = (
-            f"<:gift:1000008822> **¡Hey {member.name}!**\n"
-            f"Te doy la bienvenida a **{member.guild.name}** ✨\n\n"
+            f"<:regalo:1483506548495093957> **¡Hey {member.name}!**\n"
+            f"Te doy la bienvenida a **{member.guild.name}** <:tada:148351096085663344>\n\n"
 
-            f"<:announce:1000008820> Actualmente somos **{member.guild.member_count} personas** formando parte de esta comunidad.\n"
+            f"<:anuncio:1483506577024614660> Actualmente somos **{member.guild.member_count} personas** formando parte de esta comunidad.\n"
             "Es un placer tenerte por aquí, de verdad.\n\n"
 
-            f"<:shield:1000008818> **¿Qué es ModdyBot?**\n"
+            f"<:escudo:1483506514399334441> **¿Qué es ModdyBot?**\n"
             "**ModdyBot** es tu compañero de seguridad y organización dentro del servidor.\n"
             "Estoy aquí para ayudarte a tener una experiencia cómoda, segura y sin complicaciones.\n\n"
 
-            f"<:shield:1000008818> **ModdyBot te acompaña**\n"
+            f"<:escudo:1483506514399334441> **ModdyBot te acompaña**\n"
             "Mi misión es mantener el servidor seguro, organizado y funcionando sin problemas.\n"
             "Si necesitas algo, no dudes en contactar con el staff.\n\n"
 
-            f"<:warning:1000008817> **Consejos para empezar**\n"
+            f"<:regalo:1483506548495093957> **Consejos para empezar**\n"
             "• Échale un vistazo a las normas del servidor 📜\n"
             "• Respeta a los demás miembros 🤝\n"
             "• Y sobre todo… ¡pásalo bien! 😄\n\n"
 
-            f"<:alert:1000011234> **¿Necesitas ayuda?**\n"
+            f"<:anuncio:1483506577024614660> **¿Necesitas ayuda?**\n"
             "Puedes entrar a nuestro servidor oficial de soporte:\n"
             "[🔗 Servidor de soporte](https://discord.gg/u8W4jv7NXx)\n\n"
 
             "🚀 **¿Quieres usar ModdyBot en tus servidores?**\n"
             "[✨ Invitar ModdyBot](https://discord.com/oauth2/authorize?client_id=1450924184606740642&permissions=8&integration_type=0&scope=bot)\n\n"
 
-            f"<:check:1000011237> **¡Gracias por unirte!**\n"
+            f"<:check:1476336175114354891> **¡Gracias por unirte!**\n"
             "Estoy seguro de que encajarás genial aquí."
         )
 
