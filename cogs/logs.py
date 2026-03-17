@@ -4,6 +4,7 @@ from discord import app_commands
 import json
 import os
 import datetime
+from typing import Optional
 
 LOGS_FILE = "logs_config.json"
 
@@ -75,15 +76,27 @@ EVENT_ICONS = {
 
 
 # ============================
-# EMBEDS PRO
+# CATEGORÍAS
 # ============================
 
-def create_log_embed(event_key: str, title: str, description: str, guild: discord.Guild):
+CATEGORIES = {
+    "joins": ["join", "leave", "ban", "unban"],
+    "roles": ["role_add", "role_remove"],
+    "canales": ["channel_create", "channel_delete", "channel_update"],
+    "mensajes": ["msg_delete", "msg_edit"],
+    "servidor": ["boost", "server_update"],
+}
+
+
+# ============================
+# EMBEDS BASE
+# ============================
+
+def create_log_embed(event_key: str, title: str, guild: discord.Guild):
     fecha, hora = format_timestamp()
 
     embed = discord.Embed(
         title=f"{EVENT_ICONS.get(event_key, '📄')} {title}",
-        description=description,
         color=EVENT_COLORS.get(event_key, discord.Color.blurple())
     )
 
@@ -97,17 +110,45 @@ def create_log_embed(event_key: str, title: str, description: str, guild: discor
     return embed
 
 
-# ============================
-# CATEGORÍAS
-# ============================
+def add_user_block(embed: discord.Embed, user: discord.abc.User | discord.Member, member: Optional[discord.Member] = None):
+    embed.add_field(name="👤 Usuario", value=f"{user.mention}\n`{user}`", inline=False)
+    embed.add_field(name="🆔 Usuario ID", value=f"`{user.id}`", inline=True)
+    embed.add_field(name="🤖 Bot", value="Sí" if user.bot else "No", inline=True)
 
-CATEGORIES = {
-    "joins": ["join", "leave", "ban", "unban"],
-    "roles": ["role_add", "role_remove"],
-    "canales": ["channel_create", "channel_delete", "channel_update"],
-    "mensajes": ["msg_delete", "msg_edit"],
-    "servidor": ["boost", "server_update"],
-}
+    created = user.created_at.strftime("%d/%m/%Y %H:%M:%S")
+    embed.add_field(name="📆 Cuenta creada", value=created, inline=False)
+
+    if member is not None:
+        joined = member.joined_at.strftime("%d/%m/%Y %H:%M:%S") if member.joined_at else "Desconocido"
+        embed.add_field(name="📥 Entró al servidor", value=joined, inline=False)
+
+    if user.avatar:
+        embed.set_author(name=str(user), icon_url=user.avatar.url)
+
+
+def add_message_block(embed: discord.Embed, message: discord.Message, deleted: bool = False):
+    embed.add_field(
+        name="💬 Contenido",
+        value=message.content if message.content else "*Sin contenido de texto*",
+        inline=False
+    )
+    embed.add_field(
+        name="📨 Mensaje ID",
+        value=f"`{message.id}`",
+        inline=True
+    )
+    embed.add_field(
+        name="📺 Canal",
+        value=f"{message.channel.mention}\nID: `{message.channel.id}`",
+        inline=True
+    )
+
+    if message.attachments:
+        atts = "\n".join(f"- {a.filename} ({a.url})" for a in message.attachments)
+        embed.add_field(name="📎 Adjuntos", value=atts[:1024], inline=False)
+
+    if deleted:
+        embed.set_footer(text="Mensaje eliminado")
 
 
 # ============================
@@ -134,7 +175,6 @@ class UltraLogs(commands.Cog):
         if not cfg.get("enabled", False):
             return
 
-        # Buscar categoría del evento
         for cat, events in CATEGORIES.items():
             if event_key in events:
                 if not cfg["categories"].get(cat, True):
@@ -153,194 +193,284 @@ class UltraLogs(commands.Cog):
         except:
             pass
 
-
     # ============================
-    # COMANDOS
+    # COMANDO ÚNICO /logs
     # ============================
 
-    @app_commands.command(name="logs", description="Configura el sistema de logs")
-    async def logs_cmd(self, interaction: discord.Interaction):
-        await interaction.response.send_message(
-            "Usa los subcomandos:\n"
-            "`/logs estado activar/desactivar`\n"
-            "`/logs canal #canal`\n"
-            "`/logs categoria <joins/roles/canales/mensajes/servidor> activar/desactivar`",
-            ephemeral=True
-        )
-
-    # ESTADO
-    @app_commands.command(name="logs_estado", description="Activa o desactiva los logs")
-    async def logs_estado(self, interaction: discord.Interaction, estado: str):
-
-        gid = str(interaction.guild.id)
-
-        if gid not in self.logs:
-            self.logs[gid] = {"enabled": False, "channel": None, "categories": {}}
-
-        estado = estado.lower()
-        if estado not in ["activar", "desactivar"]:
-            return await interaction.response.send_message("Usa: activar / desactivar", ephemeral=True)
-
-        self.logs[gid]["enabled"] = (estado == "activar")
-        save_logs(self.logs)
-
-        await interaction.response.send_message(
-            f"🟢 Logs **{estado.upper()}**.",
-            ephemeral=True
-        )
-
-    # CANAL
-    @app_commands.command(name="logs_canal", description="Establece el canal de logs")
-    async def logs_canal(self, interaction: discord.Interaction, canal: discord.TextChannel):
-
-        gid = str(interaction.guild.id)
-
-        if gid not in self.logs:
-            self.logs[gid] = {"enabled": False, "channel": None, "categories": {}}
-
-        self.logs[gid]["channel"] = canal.id
-        save_logs(self.logs)
-
-        await interaction.response.send_message(
-            f"📌 Canal de logs establecido en {canal.mention}",
-            ephemeral=True
-        )
-
-    # CATEGORÍAS
-    @app_commands.command(name="logs_categoria", description="Activa o desactiva una categoría de logs")
-    async def logs_categoria(self, interaction: discord.Interaction, categoria: str, estado: str):
-
-        categoria = categoria.lower()
-        estado = estado.lower()
-
-        if categoria not in CATEGORIES:
+    @app_commands.command(name="logs", description="Configura el sistema de logs completo")
+    @app_commands.describe(
+        estado="Activar o desactivar todos los logs",
+        canal="Canal donde se enviarán los logs",
+        joins="Logs de entradas, salidas, baneos y desbaneos",
+        roles="Logs de roles añadidos/quitados",
+        canales="Logs de canales creados/eliminados/actualizados",
+        mensajes="Logs de mensajes eliminados/editados",
+        servidor="Logs de boosts y cambios del servidor"
+    )
+    @app_commands.choices(
+        estado=[
+            app_commands.Choice(name="Activar", value="activar"),
+            app_commands.Choice(name="Desactivar", value="desactivar")
+        ],
+        joins=[
+            app_commands.Choice(name="Activar", value="activar"),
+            app_commands.Choice(name="Desactivar", value="desactivar")
+        ],
+        roles=[
+            app_commands.Choice(name="Activar", value="activar"),
+            app_commands.Choice(name="Desactivar", value="desactivar")
+        ],
+        canales=[
+            app_commands.Choice(name="Activar", value="activar"),
+            app_commands.Choice(name="Desactivar", value="desactivar")
+        ],
+        mensajes=[
+            app_commands.Choice(name="Activar", value="activar"),
+            app_commands.Choice(name="Desactivar", value="desactivar")
+        ],
+        servidor=[
+            app_commands.Choice(name="Activar", value="activar"),
+            app_commands.Choice(name="Desactivar", value="desactivar")
+        ]
+    )
+    async def logs_cmd(
+        self,
+        interaction: discord.Interaction,
+        estado: Optional[app_commands.Choice[str]] = None,
+        canal: Optional[discord.TextChannel] = None,
+        joins: Optional[app_commands.Choice[str]] = None,
+        roles: Optional[app_commands.Choice[str]] = None,
+        canales: Optional[app_commands.Choice[str]] = None,
+        mensajes: Optional[app_commands.Choice[str]] = None,
+        servidor: Optional[app_commands.Choice[str]] = None
+    ):
+        if not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message(
-                f"Categorías válidas: {', '.join(CATEGORIES.keys())}",
+                "❌ Solo administradores pueden usar este comando.",
                 ephemeral=True
             )
 
-        if estado not in ["activar", "desactivar"]:
-            return await interaction.response.send_message("Usa: activar / desactivar", ephemeral=True)
-
         gid = str(interaction.guild.id)
 
         if gid not in self.logs:
-            self.logs[gid] = {"enabled": False, "channel": None, "categories": {}}
+            self.logs[gid] = {
+                "enabled": False,
+                "channel": None,
+                "categories": {
+                    "joins": True,
+                    "roles": True,
+                    "canales": True,
+                    "mensajes": True,
+                    "servidor": True
+                }
+            }
 
-        self.logs[gid]["categories"][categoria] = (estado == "activar")
+        cfg = self.logs[gid]
+        changed = []
+
+        if estado is not None:
+            cfg["enabled"] = (estado.value == "activar")
+            changed.append(f"Estado: **{estado.value.upper()}**")
+
+        if canal is not None:
+            cfg["channel"] = canal.id
+            changed.append(f"Canal: {canal.mention}")
+
+        if joins is not None:
+            cfg["categories"]["joins"] = (joins.value == "activar")
+            changed.append(f"Joins: **{joins.value.upper()}**")
+
+        if roles is not None:
+            cfg["categories"]["roles"] = (roles.value == "activar")
+            changed.append(f"Roles: **{roles.value.upper()}**")
+
+        if canales is not None:
+            cfg["categories"]["canales"] = (canales.value == "activar")
+            changed.append(f"Canales: **{canales.value.upper()}**")
+
+        if mensajes is not None:
+            cfg["categories"]["mensajes"] = (mensajes.value == "activar")
+            changed.append(f"Mensajes: **{mensajes.value.upper()}**")
+
+        if servidor is not None:
+            cfg["categories"]["servidor"] = (servidor.value == "activar")
+            changed.append(f"Servidor: **{servidor.value.upper()}**")
+
         save_logs(self.logs)
 
-        await interaction.response.send_message(
-            f"📁 Categoría **{categoria}** {estado.upper()}",
-            ephemeral=True
-        )
+        if not changed:
+            cfg_cat = cfg["categories"]
+            resumen = (
+                f"🟢 Estado: **{'ACTIVADO' if cfg['enabled'] else 'DESACTIVADO'}**\n"
+                f"📌 Canal: {interaction.guild.get_channel(cfg['channel']).mention if cfg['channel'] else 'No configurado'}\n"
+                f"📂 Joins: **{'ON' if cfg_cat.get('joins', True) else 'OFF'}**\n"
+                f"📂 Roles: **{'ON' if cfg_cat.get('roles', True) else 'OFF'}**\n"
+                f"📂 Canales: **{'ON' if cfg_cat.get('canales', True) else 'OFF'}**\n"
+                f"📂 Mensajes: **{'ON' if cfg_cat.get('mensajes', True) else 'OFF'}**\n"
+                f"📂 Servidor: **{'ON' if cfg_cat.get('servidor', True) else 'OFF'}**"
+            )
+            return await interaction.response.send_message(
+                f"⚙️ Configuración actual de logs:\n{resumen}",
+                ephemeral=True
+            )
 
+        texto = "✅ Configuración de logs actualizada:\n" + "\n".join(f"• {c}" for c in changed)
+        await interaction.response.send_message(texto, ephemeral=True)
 
     # ============================
-    # EVENTOS (SE MANTIENEN IGUAL)
+    # EVENTOS
     # ============================
 
     @commands.Cog.listener()
-    async def on_member_join(self, member):
-        desc = f"👤 Usuario: {member.mention}\n🆔 `{member.id}`"
-        embed = create_log_embed("join", "Usuario Entró", desc, member.guild)
-        await self.send_log(member.guild, embed, "join")
+    async def on_member_join(self, member: discord.Member):
+        guild = member.guild
+        embed = create_log_embed("join", "Usuario Entró", guild)
+        add_user_block(embed, member, member)
+        await self.send_log(guild, embed, "join")
 
     @commands.Cog.listener()
-    async def on_member_remove(self, member):
-        desc = f"👤 Usuario: {member.mention}\n🆔 `{member.id}`"
-        embed = create_log_embed("leave", "Usuario Salió", desc, member.guild)
-        await self.send_log(member.guild, embed, "leave")
+    async def on_member_remove(self, member: discord.Member):
+        guild = member.guild
+        embed = create_log_embed("leave", "Usuario Salió", guild)
+        add_user_block(embed, member, member)
+        await self.send_log(guild, embed, "leave")
 
     @commands.Cog.listener()
-    async def on_member_ban(self, guild, user):
-        desc = f"👤 Usuario: {user.mention}\n🆔 `{user.id}`"
-        embed = create_log_embed("ban", "Usuario Baneado", desc, guild)
+    async def on_member_ban(self, guild: discord.Guild, user: discord.User):
+        embed = create_log_embed("ban", "Usuario Baneado", guild)
+        add_user_block(embed, user, None)
         await self.send_log(guild, embed, "ban")
 
     @commands.Cog.listener()
-    async def on_member_unban(self, guild, user):
-        desc = f"👤 Usuario: {user.mention}\n🆔 `{user.id}`"
-        embed = create_log_embed("unban", "Usuario Desbaneado", desc, guild)
+    async def on_member_unban(self, guild: discord.Guild, user: discord.User):
+        embed = create_log_embed("unban", "Usuario Desbaneado", guild)
+        add_user_block(embed, user, None)
         await self.send_log(guild, embed, "unban")
 
     @commands.Cog.listener()
-    async def on_message_delete(self, message):
+    async def on_message_delete(self, message: discord.Message):
         if not message.guild or message.author.bot:
             return
-        desc = f"👤 Autor: {message.author.mention}\n💬 Contenido:\n{message.content}"
-        embed = create_log_embed("msg_delete", "Mensaje Eliminado", desc, message.guild)
-        await self.send_log(message.guild, embed, "msg_delete")
+        guild = message.guild
+        embed = create_log_embed("msg_delete", "Mensaje Eliminado", guild)
+        add_user_block(embed, message.author, message.author if isinstance(message.author, discord.Member) else None)
+        add_message_block(embed, message, deleted=True)
+        await self.send_log(guild, embed, "msg_delete")
 
     @commands.Cog.listener()
-    async def on_message_edit(self, before, after):
+    async def on_message_edit(self, before: discord.Message, after: discord.Message):
         if not before.guild or before.author.bot:
             return
-        if before.content == after.content:
+        if before.content == after.content and not before.attachments and not after.attachments:
             return
-        desc = f"✏️ Antes:\n{before.content}\n\n✏️ Después:\n{after.content}"
-        embed = create_log_embed("msg_edit", "Mensaje Editado", desc, before.guild)
-        await self.send_log(before.guild, embed, "msg_edit")
+
+        guild = before.guild
+        embed = create_log_embed("msg_edit", "Mensaje Editado", guild)
+        add_user_block(embed, before.author, before.author if isinstance(before.author, discord.Member) else None)
+
+        embed.add_field(name="📨 Mensaje ID", value=f"`{before.id}`", inline=True)
+        embed.add_field(
+            name="📺 Canal",
+            value=f"{before.channel.mention}\nID: `{before.channel.id}`",
+            inline=True
+        )
+
+        before_text = before.content if before.content else "*Sin contenido*"
+        after_text = after.content if after.content else "*Sin contenido*"
+
+        embed.add_field(name="✏️ Antes", value=before_text[:1024], inline=False)
+        embed.add_field(name="✏️ Después", value=after_text[:1024], inline=False)
+
+        await self.send_log(guild, embed, "msg_edit")
 
     @commands.Cog.listener()
-    async def on_member_update(self, before, after):
+    async def on_member_update(self, before: discord.Member, after: discord.Member):
         guild = after.guild
 
-        # Rol añadido
         if len(after.roles) > len(before.roles):
             role = next(r for r in after.roles if r not in before.roles)
-            desc = f"➕ Rol añadido: {role.mention}"
-            embed = create_log_embed("role_add", "Rol Añadido", desc, guild)
+            embed = create_log_embed("role_add", "Rol Añadido", guild)
+            add_user_block(embed, after, after)
+            embed.add_field(name="➕ Rol añadido", value=f"{role.mention}\nID: `{role.id}`", inline=False)
             await self.send_log(guild, embed, "role_add")
 
-        # Rol quitado
         elif len(after.roles) < len(before.roles):
             role = next(r for r in before.roles if r not in after.roles)
-            desc = f"➖ Rol quitado: {role.mention}"
-            embed = create_log_embed("role_remove", "Rol Quitado", desc, guild)
+            embed = create_log_embed("role_remove", "Rol Quitado", guild)
+            add_user_block(embed, after, after)
+            embed.add_field(name="➖ Rol quitado", value=f"{role.mention}\nID: `{role.id}`", inline=False)
             await self.send_log(guild, embed, "role_remove")
 
     @commands.Cog.listener()
-    async def on_guild_channel_create(self, channel):
-        desc = f"📁 Canal creado: `{channel.name}`"
-        embed = create_log_embed("channel_create", "Canal Creado", desc, channel.guild)
-        await self.send_log(channel.guild, embed, "channel_create")
+    async def on_guild_channel_create(self, channel: discord.abc.GuildChannel):
+        guild = channel.guild
+        embed = create_log_embed("channel_create", "Canal Creado", guild)
+        embed.add_field(name="📁 Canal", value=f"{getattr(channel, 'mention', '`Sin mención`')}\n`{channel.name}`", inline=False)
+        embed.add_field(name="🆔 Canal ID", value=f"`{channel.id}`", inline=True)
+        if channel.category:
+            embed.add_field(name="📂 Categoría", value=f"{channel.category.name}\nID: `{channel.category.id}`", inline=True)
+        await self.send_log(guild, embed, "channel_create")
 
     @commands.Cog.listener()
-    async def on_guild_channel_delete(self, channel):
-        desc = f"🗑️ Canal eliminado: `{channel.name}`"
-        embed = create_log_embed("channel_delete", "Canal Eliminado", desc, channel.guild)
-        await self.send_log(channel.guild, embed, "channel_delete")
+    async def on_guild_channel_delete(self, channel: discord.abc.GuildChannel):
+        guild = channel.guild
+        embed = create_log_embed("channel_delete", "Canal Eliminado", guild)
+        embed.add_field(name="🗑️ Canal", value=f"`{channel.name}`", inline=False)
+        embed.add_field(name="🆔 Canal ID", value=f"`{channel.id}`", inline=True)
+        await self.send_log(guild, embed, "channel_delete")
 
     @commands.Cog.listener()
-    async def on_guild_channel_update(self, before, after):
-        if before.name != after.name:
-            desc = f"✏️ Renombrado: `{before.name}` → `{after.name}`"
-            embed = create_log_embed("channel_update", "Canal Renombrado", desc, after.guild)
-            await self.send_log(after.guild, embed, "channel_update")
-
-        if before.category != after.category:
-            desc = f"📂 Categoría cambiada"
-            embed = create_log_embed("channel_update", "Categoría Cambiada", desc, after.guild)
-            await self.send_log(after.guild, embed, "channel_update")
-
-    @commands.Cog.listener()
-    async def on_guild_update(self, before, after):
-        if before.premium_subscription_count != after.premium_subscription_count:
-            desc = f"💎 Boost cambiado"
-            embed = create_log_embed("boost", "Boost del Servidor", desc, after)
-            await self.send_log(after, embed, "boost")
+    async def on_guild_channel_update(self, before: discord.abc.GuildChannel, after: discord.abc.GuildChannel):
+        guild = after.guild
+        cambios = []
 
         if before.name != after.name:
-            desc = f"🏷️ Nombre cambiado"
-            embed = create_log_embed("server_update", "Nombre del Servidor Cambiado", desc, after)
-            await self.send_log(after, embed, "server_update")
+            cambios.append(f"Nombre: `{before.name}` → `{after.name}`")
 
+        if getattr(before, "category", None) != getattr(after, "category", None):
+            antes_cat = before.category.name if before.category else "Ninguna"
+            despues_cat = after.category.name if after.category else "Ninguna"
+            cambios.append(f"Categoría: `{antes_cat}` → `{despues_cat}`")
+
+        if not cambios:
+            return
+
+        embed = create_log_embed("channel_update", "Canal Actualizado", guild)
+        embed.add_field(
+            name="📺 Canal",
+            value=f"{getattr(after, 'mention', '`Sin mención`')}\n`{after.name}`\nID: `{after.id}`",
+            inline=False
+        )
+        embed.add_field(
+            name="✏️ Cambios",
+            value="\n".join(f"• {c}" for c in cambios)[:1024],
+            inline=False
+        )
+        await self.send_log(guild, embed, "channel_update")
+
+    @commands.Cog.listener()
+    async def on_guild_update(self, before: discord.Guild, after: discord.Guild):
+        cambios = []
+        if before.name != after.name:
+            cambios.append(f"Nombre: `{before.name}` → `{after.name}`")
         if before.icon != after.icon:
-            desc = f"🖼️ Icono cambiado"
-            embed = create_log_embed("server_update", "Icono del Servidor Cambiado", desc, after)
-            await self.send_log(after, embed, "server_update")
+            cambios.append("Icono del servidor cambiado")
+        if before.premium_subscription_count != after.premium_subscription_count:
+            cambios.append(
+                f"Boosts: `{before.premium_subscription_count}` → `{after.premium_subscription_count}`"
+            )
+
+        if not cambios:
+            return
+
+        embed = create_log_embed("server_update", "Servidor Actualizado", after)
+        embed.add_field(
+            name="✏️ Cambios",
+            value="\n".join(f"• {c}" for c in cambios)[:1024],
+            inline=False
+        )
+        await self.send_log(after, embed, "server_update")
 
 
 async def setup(bot):
-    await bot.add_cog(UltraLogs(bot))
+    await bot.add_cog(UltraLogs(bot)) 
