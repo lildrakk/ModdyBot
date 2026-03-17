@@ -348,13 +348,18 @@ class VerificationCog(commands.Cog):
             ephemeral=True
         )
 
-    # ============================
-    # LOG DE VERIFICACIÓN
-    # ============================
+# ============================
+# LOG DE VERIFICACIÓN
+# ============================
 
-    async def enviar_log_verificacion(self, usuario: discord.Member, guild: discord.Guild,
-                                  canal_logs: discord.TextChannel,
-                                  rol_dado=None, rol_quitado=None):
+async def enviar_log_verificacion(
+    self,
+    usuario: discord.Member,
+    guild: discord.Guild,
+    canal_logs: discord.TextChannel,
+    rol_dado=None,
+    rol_quitado=None
+):
 
     if not canal_logs:
         return
@@ -418,10 +423,6 @@ class VerificationCog(commands.Cog):
         embed.set_thumbnail(url=usuario.avatar.url)
 
     await canal_logs.send(embed=embed)
-
-# ============================
-# SETUP
-# ============================
 
 async def setup(bot):
     await bot.add_cog(VerificationCog(bot))
