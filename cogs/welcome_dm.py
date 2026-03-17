@@ -175,17 +175,16 @@ class WelcomeDMCog(commands.Cog):
             "Si necesitas algo, no dudes en contactar con el staff.\n\n"
 
             f"<:regalo:1483506548495093957> **Consejos para empezar**\n"
-            "• Échale un vistazo a las normas del servidor 📜\n"
-            "• Respeta a los demás miembros 🤝\n"
-            "• Y sobre todo… ¡pásalo bien! 😄\n\n"
+            "• Échale un vistazo a las normas del servidor\n"
+            "• Respeta a los demás miembros\n"
+            "• Y sobre todo… ¡pásalo bien!\n\n"
 
             f"<:anuncio:1483506577024614660> **¿Necesitas ayuda?**\n"
             "Puedes entrar a nuestro servidor oficial de soporte:\n"
             "[🔗 Servidor de soporte](https://discord.gg/u8W4jv7NXx)\n\n"
 
-            "🚀 **¿Quieres usar ModdyBot en tus servidores?**\n"
-            "[✨ Invitar ModdyBot](https://discord.com/oauth2/authorize?client_id=1450924184606740642&permissions=8&integration_type=0&scope=bot)\n\n"
-
+            f"<:anuncio:1483506577024614660> **¿Quieres usar ModdyBot en tus servidores?**\n"
+            "[<:tada:148351096085663344> Invitar ModdyBot](https://discord.com/oauth2/authorize?client_id=1450924184606740642&permissions=8&integration_type=0&scope=bot)\n\n"
             f"<:check:1476336175114354891> **¡Gracias por unirte!**\n"
             "Estoy seguro de que encajarás genial aquí."
         )
