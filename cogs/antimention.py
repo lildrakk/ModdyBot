@@ -287,71 +287,71 @@ class AntiMention(commands.Cog):
     # ============================================================
 
     async def apply_action(self, message: discord.Message, reason: str):
-    guild = message.guild
-    cfg = self.ensure_guild(guild.id)
-    user = message.author
-    action = cfg["accion"]
+        guild = message.guild
+        cfg = self.ensure_guild(guild.id)
+        user = message.author
+        action = cfg["accion"]
 
-    # Borrar mensaje del usuario
-    try:
-        await message.delete()
-    except:
-        pass
+        # Borrar mensaje del usuario
+        try:
+            await message.delete()
+        except:
+            pass
 
-    # ⚠️ AVISO AL USUARIO
-    aviso = discord.Embed(
-        title="⚠️ Mención no permitida",
-        description=f"{user.mention}, ese usuario/rol está **prohibido** ser mencionado.",
-        color=discord.Color.orange()
-    )
-    try:
-        await message.channel.send(user.mention, embed=aviso, delete_after=6)
-    except:
-        pass
+        # ⚠️ AVISO AL USUARIO
+        aviso = discord.Embed(
+            title="⚠️ Mención no permitida",
+            description=f"{user.mention}, ese usuario/rol está **prohibido** ser mencionado.",
+            color=discord.Color.orange()
+        )
+        try:
+            await message.channel.send(user.mention, embed=aviso, delete_after=6)
+        except:
+            pass
 
-    # Logs
-    if cfg["logs"]:
-        ch = guild.get_channel(cfg["logs"])
-        if ch:
-            embed = discord.Embed(
-                title="📘 Log Anti‑Mention",
-                description=f"Usuario: {user.mention}\nRazón: `{reason}`",
-                color=discord.Color.blue()
-            )
-            await ch.send(embed=embed)
+        # Logs
+        if cfg["logs"]:
+            ch = guild.get_channel(cfg["logs"])
+            if ch:
+                embed = discord.Embed(
+                    title="📘 Log Anti‑Mention",
+                    description=f"Usuario: {user.mention}\nRazón: `{reason}`",
+                    color=discord.Color.blue()
+                )
+                await ch.send(embed=embed)
 
-    # Intentar sanción
-    sancionado = False
-
-    try:
-        if action == "ban":
-            await guild.ban(user, reason=f"Anti‑Mention: {reason}")
-        elif action == "kick":
-            await guild.kick(user, reason=f"Anti‑Mention: {reason}")
-        elif action == "mute":
-            await user.timeout(
-                discord.utils.utcnow() + timedelta(seconds=cfg["mute_time"]),
-                reason=f"Anti‑Mention: {reason}"
-            )
-        sancionado = True
-    except:
+        # Intentar sanción
         sancionado = False
 
-    # Embed según resultado
-    if not sancionado:
-        embed = discord.Embed(
-            title="⚠️ No se pudo aplicar sanción",
-            description=f"Detecté abuso de menciones de {user.mention}, pero no tengo permisos.",
-            color=discord.Color.yellow()
-        )
-    else:
-        embed = discord.Embed(
-            title="⛔ Sanción aplicada",
-            description=f"Usuario: {user.mention}\nAcción: **{action}**\nRazón: {reason}",
-            color=discord.Color.red()
-        )
+        try:
+            if action == "ban":
+                await guild.ban(user, reason=f"Anti‑Mention: {reason}")
+            elif action == "kick":
+                await guild.kick(user, reason=f"Anti‑Mention: {reason}")
+            elif action == "mute":
+                await user.timeout(
+                    discord.utils.utcnow() + timedelta(seconds=cfg["mute_time"]),
+                    reason=f"Anti‑Mention: {reason}"
+                )
+            sancionado = True
+        except:
+            sancionado = False
 
-    await message.channel.send(embed=embed)
+        # Embed según resultado
+        if not sancionado:
+            embed = discord.Embed(
+                title="⚠️ No se pudo aplicar sanción",
+                description=f"Detecté abuso de menciones de {user.mention}, pero no tengo permisos.",
+                color=discord.Color.yellow()
+            )
+        else:
+            embed = discord.Embed(
+                title="⛔ Sanción aplicada",
+                description=f"Usuario: {user.mention}\nAcción: **{action}**\nRazón: {reason}",
+                color=discord.Color.red()
+            )
+
+        await message.channel.send(embed=embed) 
 
 # ============================================================
 # SETUP
