@@ -68,7 +68,7 @@ class AntiMention(commands.Cog):
         return self.config[gid]
 
     # ============================================================
-    # COMANDO PRINCIPAL /antimention (SIN SELECTS)
+    # COMANDO PRINCIPAL /antimention
     # ============================================================
 
     @app_commands.command(name="antimention", description="Configura el Anti‑Mention.")
@@ -95,18 +95,15 @@ class AntiMention(commands.Cog):
         guild = interaction.guild
         cfg = self.ensure_guild(guild.id)
 
-        # Activar / desactivar
         if activar is not None:
             cfg["enabled"] = activar
 
-        # Acción
         if accion is not None:
             acciones = {1: "warn", 2: "mute", 3: "kick", 4: "ban"}
             if accion not in acciones:
                 return await interaction.response.send_message("Valor inválido para acción.", ephemeral=True)
             cfg["accion"] = acciones[accion]
 
-        # Límites
         if limite_usuarios is not None:
             cfg["limit_users"] = max(1, limite_usuarios)
 
@@ -116,11 +113,9 @@ class AntiMention(commands.Cog):
         if limite_everyone is not None:
             cfg["limit_everyone"] = max(0, limite_everyone)
 
-        # Cooldown
         if cooldown is not None:
             cfg["cooldown"] = max(0, cooldown)
 
-        # Logs
         if logs is not None:
             cfg["logs"] = logs.id
 
@@ -141,7 +136,7 @@ class AntiMention(commands.Cog):
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     # ============================================================
-    # COMANDO /antimention config (CON SELECTS)
+    # COMANDO /antimention_config
     # ============================================================
 
     @app_commands.command(name="antimention_config", description="Configura whitelist y blacklist del Anti‑Mention.")
@@ -150,7 +145,6 @@ class AntiMention(commands.Cog):
         guild = interaction.guild
         cfg = self.ensure_guild(guild.id)
 
-        # SELECT PARA WHITELIST / BLACKLIST
         class ConfigSelect(discord.ui.Select):
             def __init__(self):
                 options = [
@@ -181,7 +175,6 @@ class AntiMention(commands.Cog):
                     lista = cfg["blocked_roles"]
                     titulo = "Blacklist roles"
 
-                # SELECT DE OBJETIVOS
                 class TargetSelect(discord.ui.Select):
                     def __init__(self):
                         opts = []
@@ -251,7 +244,6 @@ class AntiMention(commands.Cog):
         if not cfg["enabled"]:
             return
 
-        # Whitelist
         if user.id in cfg["whitelist_users"]:
             return
         if any(r.id in cfg["whitelist_roles"] for r in user.roles):
@@ -259,20 +251,17 @@ class AntiMention(commands.Cog):
         if message.channel.id in cfg["whitelist_channels"]:
             return
 
-        # Cooldown
         now = time.time()
         if user.id in self.cooldowns and now - self.cooldowns[user.id] < cfg["cooldown"]:
             return
         self.cooldowns[user.id] = now
 
-        # Bloqueo directo
         if any(u.id in cfg["blocked_users"] for u in message.mentions):
             return await self.apply_action(message, "Mención a usuario bloqueado")
 
         if any(r.id in cfg["blocked_roles"] for r in message.role_mentions):
             return await self.apply_action(message, "Mención a rol bloqueado")
 
-        # Límites
         if len(message.mentions) > cfg["limit_users"]:
             return await self.apply_action(message, "Exceso de menciones a usuarios")
 
@@ -283,7 +272,7 @@ class AntiMention(commands.Cog):
             return await self.apply_action(message, "Uso de @everyone/@here")
 
     # ============================================================
-    # APLICAR SANCIÓN (EMBEDS PRO)
+    # APLICAR SANCIÓN
     # ============================================================
 
     async def apply_action(self, message: discord.Message, reason: str):
@@ -292,13 +281,11 @@ class AntiMention(commands.Cog):
         user = message.author
         action = cfg["accion"]
 
-        # Borrar mensaje del usuario
         try:
             await message.delete()
         except:
             pass
 
-        # ⚠️ AVISO AL USUARIO
         aviso = discord.Embed(
             title="⚠️ Mención no permitida",
             description=f"{user.mention}, ese usuario/rol está **prohibido** ser mencionado.",
@@ -309,7 +296,6 @@ class AntiMention(commands.Cog):
         except:
             pass
 
-        # Logs
         if cfg["logs"]:
             ch = guild.get_channel(cfg["logs"])
             if ch:
@@ -320,7 +306,6 @@ class AntiMention(commands.Cog):
                 )
                 await ch.send(embed=embed)
 
-        # Intentar sanción
         sancionado = False
 
         try:
@@ -337,7 +322,6 @@ class AntiMention(commands.Cog):
         except:
             sancionado = False
 
-        # Embed según resultado
         if not sancionado:
             embed = discord.Embed(
                 title="⚠️ No se pudo aplicar sanción",
@@ -351,7 +335,7 @@ class AntiMention(commands.Cog):
                 color=discord.Color.red()
             )
 
-        await message.channel.send(embed=embed) 
+        await message.channel.send(embed=embed)
 
 # ============================================================
 # SETUP
