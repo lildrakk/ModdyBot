@@ -133,7 +133,7 @@ class AntiFlood(commands.Cog):
         save_config(self.config)
 
         embed = discord.Embed(
-            title="<:warn:1474968532113424425> Configuración Anti‑Flood actualizada",
+            title="⚠️ Configuración Anti‑Flood actualizada",
             color=discord.Color.yellow()
         )
 
@@ -198,7 +198,7 @@ class AntiFlood(commands.Cog):
                 self.warned[user.id] = now
 
                 embed = discord.Embed(
-                    title="<:warn:1474968532113424425> Aviso de Flood",
+                    title="⚠️ Aviso de Flood",
                     description=f"{user.mention}, **estás enviando mensajes muy rápido**.\nReduce la velocidad o se aplicará una sanción.",
                     color=discord.Color.yellow()
                 )
@@ -239,7 +239,7 @@ class AntiFlood(commands.Cog):
         # Si NO se pudo sancionar → aviso
         if not sancionado:
             embed = discord.Embed(
-                title="<:warn:1474968532113424425> Flood detectado",
+                title="⚠️ Flood detectado",
                 description=(
                     f"Detecté flood de {user.mention}.\n"
                     f"Pero **no he podido aplicar la acción configurada porque no tengo permisos**."
@@ -251,7 +251,7 @@ class AntiFlood(commands.Cog):
 
         # Si SÍ se sancionó
         embed = discord.Embed(
-            title="<:advertencia:1469794223719972996> Sanción aplicada",
+            title="⛔ Sanción aplicada",
             description=f"Usuario: {user.mention}\nAcción: **{action}**\nRazón: Flood",
             color=discord.Color.red()
         )
