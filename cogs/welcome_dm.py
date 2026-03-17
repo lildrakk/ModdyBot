@@ -107,9 +107,9 @@ class WelcomeDMCog(commands.Cog):
             "Si necesitas algo, no dudes en contactar con el staff.\n\n"
 
             f"<:regalo:1483506548495093957> **Consejos para empezar**\n"
-            "• Échale un vistazo a las normas del servidor 📜\n"
-            "• Respeta a los demás miembros 🤝\n"
-            "• Y sobre todo… ¡pásalo bien! 😄\n\n"
+            "• Échale un vistazo a las normas del servidor \n"
+            "• Respeta a los demás miembros \n"
+            "• Y sobre todo… ¡pásalo bien! \n\n"
 
             f"<:anuncio:1483506577024614660> **¿Necesitas ayuda?**\n"
             "Puedes entrar a nuestro servidor oficial de soporte:\n"
