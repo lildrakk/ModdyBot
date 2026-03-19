@@ -8,7 +8,7 @@ import string
 from PIL import Image, ImageDraw, ImageFont
 import io
 
-VERIFICATION_FILE = "verification.json"
+VERIFICATION_FILE = os.path.join(os.path.dirname(__file__), "..", "verification.json")
 
 # ============================
 # JSON
