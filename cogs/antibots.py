@@ -1,9 +1,11 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
-import json, os
+import json
+import os
 
-CONFIG_FILE = "antibots.json"
+BASE_DIR = os.path.dirname(os.path.dirname(__file__))
+CONFIG_FILE = os.path.join(BASE_DIR, "antibots.json") 
 
 # ============================================================
 # CONFIG
