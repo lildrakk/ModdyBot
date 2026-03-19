@@ -5,26 +5,26 @@ import json
 import os
 import asyncio
 
-
-AUTOROLE_FILE = "autorole.json"
-
+# Ruta correcta para Render
+BASE_DIR = os.path.dirname(os.path.dirname(__file__))
+CONFIG_FILE = os.path.join(BASE_DIR, "autorole.json")
 
 # ============================
 # JSON LOADER
 # ============================
 
 def load_autorole():
-    if not os.path.exists(AUTOROLE_FILE):
-        with open(AUTOROLE_FILE, "w") as f:
+    if not os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "w") as f:
             json.dump({}, f, indent=4)
         return {}
 
-    with open(AUTOROLE_FILE, "r") as f:
+    with open(CONFIG_FILE, "r") as f:
         return json.load(f)
 
 
 def save_autorole(data):
-    with open(AUTOROLE_FILE, "w") as f:
+    with open(CONFIG_FILE, "w") as f:
         json.dump(data, f, indent=4)
 
 
