@@ -8,8 +8,9 @@ import re
 import random
 from datetime import datetime, timedelta
 
-GIVEAWAY_FILE = "giveaways.json"
-
+# Ruta correcta para Render
+BASE_DIR = os.path.dirname(os.path.dirname(__file__))
+GIVEAWAY_FILE = os.path.join(BASE_DIR, "giveaways.json")
 
 # ============================
 # JSON LOADER
@@ -19,6 +20,7 @@ def load_giveaways():
     if not os.path.exists(GIVEAWAY_FILE):
         with open(GIVEAWAY_FILE, "w") as f:
             json.dump({}, f, indent=4)
+
     with open(GIVEAWAY_FILE, "r") as f:
         return json.load(f)
 
