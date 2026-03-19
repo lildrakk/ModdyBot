@@ -7,12 +7,22 @@ import asyncio
 from datetime import datetime
 
 # ============================
+# RUTA CORRECTA PARA RENDER
+# ============================
+
+BASE_DIR = os.path.dirname(os.path.dirname(__file__))
+
+def get_paths(user_id):
+    folder = os.path.join(BASE_DIR, "backups", str(user_id))
+    path = os.path.join(folder, "backups.json")
+    return folder, path
+
+# ============================
 # JSON LOADERS
 # ============================
 
 def load_backups(user_id):
-    folder = f"backups/{user_id}"
-    path = f"{folder}/backups.json"
+    folder, path = get_paths(user_id)
 
     if not os.path.exists(folder):
         os.makedirs(folder)
@@ -28,8 +38,7 @@ def load_backups(user_id):
 
 
 def save_backups(user_id, data):
-    folder = f"backups/{user_id}"
-    path = f"{folder}/backups.json"
+    folder, path = get_paths(user_id)
 
     if not os.path.exists(folder):
         os.makedirs(folder)
