@@ -4,7 +4,9 @@ from discord import app_commands
 import json, os, time
 from datetime import timedelta
 
-CONFIG_FILE = "antimention.json"
+# Ruta correcta para Render
+BASE_DIR = os.path.dirname(os.path.dirname(__file__))
+CONFIG_FILE = os.path.join(BASE_DIR, "antimention.json")
 
 # ============================================================
 # CONFIG SEGURO (PERSISTENTE)
