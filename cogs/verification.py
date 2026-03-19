@@ -77,7 +77,7 @@ class VerifyButtonItem(discord.ui.Button):
     def __init__(self, panel_id, label):
         super().__init__(
             label=label,
-            emoji="<:check:1460285766763806812>",
+            emoji="<a:chek:1484246505652097134>",
             style=discord.ButtonStyle.success,
             custom_id=f"verify_{panel_id}"
         )
@@ -100,8 +100,8 @@ class VerificationCog(commands.Cog):
         self.bot = bot
 
         data = load_verification()
-        for guild_id in data:
-            for panel_id, cfg in data[guild_id].items():
+        for guild_id, panels in data.items():
+            for panel_id, cfg in panels.items():
                 label = cfg.get("boton", "Verificar")
                 bot.add_view(VerifyButton(panel_id, label))
 
@@ -175,7 +175,7 @@ class VerificationCog(commands.Cog):
         view = VerifyButton(panel_id, texto_boton)
 
         await canal.send(embed=embed, view=view)
-        await interaction.response.send_message("<:check:1460285766763806812> Panel creado correctamente.", ephemeral=True)
+        await interaction.response.send_message("<a:chek:1484246505652097134> Panel creado correctamente.", ephemeral=True)
 
     # ============================
     # ENVIAR PANEL EXISTENTE
@@ -212,7 +212,7 @@ class VerificationCog(commands.Cog):
         view = VerifyButton(panel_id, boton)
 
         await canal.send(embed=embed, view=view)
-        await interaction.response.send_message("<:check:1460285766763806812> Panel enviado correctamente.", ephemeral=True)
+        await interaction.response.send_message("<a:chek:1484246505652097134> Panel enviado correctamente.", ephemeral=True)
 
     # ============================
     # INTERACCIÓN DEL BOTÓN
@@ -243,7 +243,7 @@ class VerificationCog(commands.Cog):
         canal_logs = interaction.guild.get_channel(cfg.get("canal_logs"))
 
         if rol_dar and rol_dar in interaction.user.roles:
-            return await interaction.response.send_message("<:check:1460285766763806812> Ya estás verificado.", ephemeral=True)
+            return await interaction.response.send_message("<a:chek:1484246505652097134> Ya estás verificado.", ephemeral=True)
 
         # ============================
         # VERIFICACIÓN NORMAL
@@ -256,7 +256,7 @@ class VerificationCog(commands.Cog):
                 if rol_dar:
                     await interaction.user.add_roles(rol_dar)
 
-                await interaction.response.send_message("<:check:1460285766763806812> Verificación completada.", ephemeral=True)
+                await interaction.response.send_message("<a:chek:1484246505652097134> Verificación completada.", ephemeral=True)
 
                 await self.enviar_log_verificacion(
                     interaction.user,
@@ -322,7 +322,7 @@ class VerificationCog(commands.Cog):
                                     await modal_interaction.user.add_roles(rol_dar)
 
                                 await modal_interaction.response.send_message(
-                                    "<:check:1460285766763806812> Verificación completada.",
+                                    "<a:chek:1484246505652097134> Verificación completada.",
                                     ephemeral=True
                                 )
 
@@ -371,7 +371,7 @@ class VerificationCog(commands.Cog):
             return
 
         embed = discord.Embed(
-            title="<:check:1460285766763806812> Usuario Verificado",
+            title="<a:chek:1484246505652097134> Usuario Verificado",
             color=discord.Color.green()
         )
 
@@ -429,6 +429,10 @@ class VerificationCog(commands.Cog):
             embed.set_thumbnail(url=usuario.avatar.url)
 
         await canal_logs.send(embed=embed)
+
+# ============================
+# SETUP DEL COG
+# ============================
 
 async def setup(bot):
     await bot.add_cog(VerificationCog(bot))
