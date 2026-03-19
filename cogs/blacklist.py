@@ -12,6 +12,12 @@ from datetime import datetime
 GLOBAL_OWNER_ID = 1394342273919225959
 
 # ============================
+# RUTA CORRECTA PARA RENDER
+# ============================
+
+BASE_DIR = os.path.dirname(os.path.dirname(__file__))
+
+# ============================
 # JSON HELPERS
 # ============================
 
@@ -27,8 +33,12 @@ def save_json(path, data):
     with open(path, "w") as f:
         json.dump(data, f, indent=4)
 
-blacklist_servers = load_json("blacklist_servers.json")
-blacklist_global = load_json("blacklist_global.json")
+# ============================
+# ARCHIVOS REALES
+# ============================
+
+blacklist_servers = load_json(os.path.join(BASE_DIR, "blacklist_servers.json"))
+blacklist_global = load_json(os.path.join(BASE_DIR, "blacklist_global.json"))
 
 # ============================
 # SISTEMA DE ESPERA DE PRUEBAS
