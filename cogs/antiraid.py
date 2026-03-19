@@ -4,7 +4,9 @@ from discord import app_commands
 import json, os, time
 from datetime import datetime, timezone, timedelta
 
-CONFIG_FILE = "antiraid_config.json"
+# Ruta correcta para Render
+BASE_DIR = os.path.dirname(os.path.dirname(__file__))
+CONFIG_FILE = os.path.join(BASE_DIR, "antiraid_config.json")
 
 # ============================================================
 # CONFIG GLOBAL
@@ -25,8 +27,7 @@ def load_all_config():
 def save_all_config(data):
     with open(CONFIG_FILE, "w") as f:
         json.dump(data, f, indent=4)
-
-
+        
 # ============================================================
 # COG ANTI‑RAID AVANZADO (SIN PANEL)
 # ============================================================
