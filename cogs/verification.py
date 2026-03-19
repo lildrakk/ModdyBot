@@ -77,7 +77,7 @@ class VerifyButtonItem(discord.ui.Button):
     def __init__(self, panel_id, label):
         super().__init__(
             label=label,
-            emoji="<:check:1476336175114354891>",
+            emoji="<:check:1460285766763806812>",
             style=discord.ButtonStyle.success,
             custom_id=f"verify_{panel_id}"
         )
@@ -175,7 +175,7 @@ class VerificationCog(commands.Cog):
         view = VerifyButton(panel_id, texto_boton)
 
         await canal.send(embed=embed, view=view)
-        await interaction.response.send_message("<:check:1476336175114354891> Panel creado correctamente.", ephemeral=True)
+        await interaction.response.send_message("<:check:1460285766763806812> Panel creado correctamente.", ephemeral=True)
 
     # ============================
     # ENVIAR PANEL EXISTENTE
@@ -212,7 +212,7 @@ class VerificationCog(commands.Cog):
         view = VerifyButton(panel_id, boton)
 
         await canal.send(embed=embed, view=view)
-        await interaction.response.send_message("<:check:1476336175114354891> Panel enviado correctamente.", ephemeral=True)
+        await interaction.response.send_message("<:check:1460285766763806812> Panel enviado correctamente.", ephemeral=True)
 
     # ============================
     # INTERACCIÓN DEL BOTÓN
@@ -243,7 +243,7 @@ class VerificationCog(commands.Cog):
         canal_logs = interaction.guild.get_channel(cfg.get("canal_logs"))
 
         if rol_dar and rol_dar in interaction.user.roles:
-            return await interaction.response.send_message("<:check:1476336175114354891> Ya estás verificado.", ephemeral=True)
+            return await interaction.response.send_message("<:check:1460285766763806812> Ya estás verificado.", ephemeral=True)
 
         # ============================
         # VERIFICACIÓN NORMAL
@@ -256,7 +256,7 @@ class VerificationCog(commands.Cog):
                 if rol_dar:
                     await interaction.user.add_roles(rol_dar)
 
-                await interaction.response.send_message("<:check:1476336175114354891> Verificación completada.", ephemeral=True)
+                await interaction.response.send_message("<:check:1460285766763806812> Verificación completada.", ephemeral=True)
 
                 await self.enviar_log_verificacion(
                     interaction.user,
@@ -322,7 +322,7 @@ class VerificationCog(commands.Cog):
                                     await modal_interaction.user.add_roles(rol_dar)
 
                                 await modal_interaction.response.send_message(
-                                    "<:check:1476336175114354891> Verificación completada.",
+                                    "<:check:1460285766763806812> Verificación completada.",
                                     ephemeral=True
                                 )
 
@@ -341,7 +341,7 @@ class VerificationCog(commands.Cog):
                                 )
                         else:
                             await modal_interaction.response.send_message(
-                                "<:X_:1476336151835967640> Código incorrecto.",
+                                "<:X_:1476336151835967640> **Código incorrecto, inténtalo de nuevo**",
                                 ephemeral=True
                             )
 
@@ -354,81 +354,81 @@ class VerificationCog(commands.Cog):
             ephemeral=True
         )
 
-# ============================
-# LOG DE VERIFICACIÓN
-# ============================
+    # ============================
+    # LOG DE VERIFICACIÓN
+    # ============================
 
-async def enviar_log_verificacion(
-    self,
-    usuario: discord.Member,
-    guild: discord.Guild,
-    canal_logs: discord.TextChannel,
-    rol_dado=None,
-    rol_quitado=None
-):
+    async def enviar_log_verificacion(
+        self,
+        usuario: discord.Member,
+        guild: discord.Guild,
+        canal_logs: discord.TextChannel,
+        rol_dado=None,
+        rol_quitado=None
+    ):
 
-    if not canal_logs:
-        return
+        if not canal_logs:
+            return
 
-    embed = discord.Embed(
-        title="<:check:1476336175114354891> Usuario Verificado",
-        color=discord.Color.green()
-    )
-
-    embed.add_field(
-        name="<:anuncio:1483506577024614660> Usuario",
-        value=f"{usuario.mention}",
-        inline=False
-    )
-
-    embed.add_field(
-        name="<:link:1483506560935268452> ID del usuario",
-        value=str(usuario.id),
-        inline=False
-    )
-
-    embed.add_field(
-        name="<:escudo:1483506514399334441> Bot",
-        value=self.bot.user.mention,
-        inline=False
-    )
-
-    if rol_dado:
-        embed.add_field(
-            name="<:regalo:1483506548495093957> Rol asignado",
-            value=rol_dado.mention,
-            inline=False
+        embed = discord.Embed(
+            title="<:check:1460285766763806812> Usuario Verificado",
+            color=discord.Color.green()
         )
-    else:
+
         embed.add_field(
-            name="<:regalo:1483506548495093957> Rol asignado",
-            value="Ninguno",
+            name="<:anuncio:1483506577024614660> Usuario",
+            value=f"{usuario.mention}",
             inline=False
         )
 
-    if rol_quitado:
         embed.add_field(
-            name="<:basura:1483506530715439104> Rol retirado",
-            value=rol_quitado.mention,
-            inline=False
-        )
-    else:
-        embed.add_field(
-            name="<:basura:1483506530715439104> Rol retirado",
-            value="Ninguno",
+            name="<:link:1483506560935268452> ID del usuario",
+            value=str(usuario.id),
             inline=False
         )
 
-    embed.add_field(
-        name="<:discord:1483506738954244258> Servidor",
-        value=guild.name,
-        inline=False
-    )
+        embed.add_field(
+            name="<:escudo:1483506514399334441> Bot",
+            value=self.bot.user.mention,
+            inline=False
+        )
 
-    if usuario.avatar:
-        embed.set_thumbnail(url=usuario.avatar.url)
+        if rol_dado:
+            embed.add_field(
+                name="<:regalo:1483506548495093957> Rol asignado",
+                value=rol_dado.mention,
+                inline=False
+            )
+        else:
+            embed.add_field(
+                name="<:regalo:1483506548495093957> Rol asignado",
+                value="Ninguno",
+                inline=False
+            )
 
-    await canal_logs.send(embed=embed)
+        if rol_quitado:
+            embed.add_field(
+                name="<:basura:1483506530715439104> Rol retirado",
+                value=rol_quitado.mention,
+                inline=False
+            )
+        else:
+            embed.add_field(
+                name="<:basura:1483506530715439104> Rol retirado",
+                value="Ninguno",
+                inline=False
+            )
+
+        embed.add_field(
+            name="<:discord:1483506738954244258> Servidor",
+            value=guild.name,
+            inline=False
+        )
+
+        if usuario.avatar:
+            embed.set_thumbnail(url=usuario.avatar.url)
+
+        await canal_logs.send(embed=embed)
 
 async def setup(bot):
     await bot.add_cog(VerificationCog(bot))
