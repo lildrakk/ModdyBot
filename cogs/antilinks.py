@@ -1,10 +1,12 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
-import json, os, time
-from datetime import timedelta
+import json, time
+import os
+from datetime import timedelta 
 
-CONFIG_FILE = "antilinks.json"
+BASE_DIR = os.path.dirname(os.path.dirname(__file__))
+CONFIG_FILE = os.path.join(BASE_DIR, "antilinks.json") 
 
 # ============================================================
 # CONFIG (GUARDADO SEGURO)
