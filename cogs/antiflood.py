@@ -3,8 +3,10 @@ from discord.ext import commands
 from discord import app_commands
 import json, os, time
 from datetime import timedelta
+import os
 
-CONFIG_FILE = "antiflood.json"
+BASE_DIR = os.path.dirname(os.path.dirname(__file__))
+CONFIG_FILE = os.path.join(BASE_DIR, "antiflood.json") 
 
 # ============================================================
 # CONFIG
