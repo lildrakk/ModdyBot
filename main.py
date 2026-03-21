@@ -2,6 +2,10 @@ import discord
 import os
 from discord.ext import commands
 
+# 🔧 Forzar que el directorio de trabajo sea la raíz del proyecto
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+print("📌 Directorio fijado a:", os.getcwd())
+
 # DEBUG 1 — Mostrar directorio actual
 print("📁 Directorio actual:", os.getcwd())
 
@@ -49,7 +53,6 @@ async def on_ready():
     except Exception as e:
         print(f"❌ Error al sincronizar comandos: {e}")
 
-    # Flask al final
     from keep_alive import keep_alive
     keep_alive()
     print("🌐 Flask iniciado después de sincronizar comandos.")
@@ -60,4 +63,4 @@ if TOKEN is None:
 else:
     print("✔ TOKEN encontrado, iniciando bot...")
 
-bot.run(TOKEN)
+bot.run(TOKEN) 
