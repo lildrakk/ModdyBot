@@ -1,15 +1,12 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
-import json, time, os
+import json, time
 from datetime import timedelta
 
-BASE_DIR = os.path.dirname(os.path.dirname(__file__))
-CONFIG_FILE = os.path.join(BASE_DIR, "antilinks.json")
+CONFIG_FILE = "antilinks.json"
 
 def load_config():
-    if not os.path.exists(CONFIG_FILE):
-        return {}
     try:
         with open(CONFIG_FILE, "r") as f:
             return json.load(f)
@@ -17,10 +14,8 @@ def load_config():
         return {}
 
 def save_config(data):
-    tmp = CONFIG_FILE + ".tmp"
-    with open(tmp, "w") as f:
+    with open(CONFIG_FILE, "w") as f:
         json.dump(data, f, indent=4)
-    os.replace(tmp, CONFIG_FILE)
 
 class AntiLinks(commands.Cog):
     def __init__(self, bot):
@@ -52,7 +47,33 @@ class AntiLinks(commands.Cog):
                 except:
                     pass
 
+    # ============================================================
+    # /antilinks
+    # ============================================================
+
     @app_commands.command(name="antilinks", description="Configura el sistema Anti‑Links.")
+    @app_commands.describe(
+        estado="Activar o desactivar el Anti‑Links",
+        accion="Acción al detectar enlaces prohibidos",
+        mute_time="Tiempo de mute en segundos",
+        allow_invites="Permitir invitaciones de Discord",
+        log_channel="Canal donde se enviarán los logs"
+    )
+    @app_commands.choices(
+        estado=[
+            app_commands.Choice(name="Activar", value="activar"),
+            app_commands.Choice(name="Desactivar", value="desactivar")
+        ],
+        accion=[
+            app_commands.Choice(name="Mute", value="mute"),
+            app_commands.Choice(name="Kick", value="kick"),
+            app_commands.Choice(name="Ban", value="ban")
+        ],
+        allow_invites=[
+            app_commands.Choice(name="Sí", value="si"),
+            app_commands.Choice(name="No", value="no")
+        ]
+    )
     async def antilinks_cmd(
         self,
         interaction: discord.Interaction,
@@ -91,13 +112,22 @@ class AntiLinks(commands.Cog):
             value=f"<#{cfg['log_channel']}>" if cfg["log_channel"] else "No configurado",
             inline=False
         )
+
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @app_commands.command(name="antilinks_whitelist", description="Gestiona la whitelist de usuarios o roles.")
+    # ============================================================
+    # WHITELIST SIMPLIFICADA
+    # ============================================================
+
+    @app_commands.command(
+        name="antilinks_whitelist",
+        description="Gestiona la whitelist de usuarios o roles."
+    )
     @app_commands.describe(
-        accion="Selecciona si quieres añadir o eliminar de la whitelist.",
-        tipo="Indica si es usuario o rol. Ejecuta el comando varias veces para añadir o eliminar varios.",
-        objetivo="Selecciona el usuario o rol que quieres añadir o eliminar."
+        accion="Añadir o eliminar de la whitelist.",
+        tipo="Selecciona si quieres modificar un usuario o un rol.",
+        usuario="Usuario a añadir o eliminar. Ejecuta el comando varias veces para varios.",
+        rol="Rol a añadir o eliminar. Ejecuta el comando varias veces para varios."
     )
     @app_commands.choices(
         accion=[
@@ -114,10 +144,19 @@ class AntiLinks(commands.Cog):
         interaction: discord.Interaction,
         accion: str,
         tipo: str,
-        objetivo: discord.Object
+        usuario: discord.Member = None,
+        rol: discord.Role = None
     ):
         cfg = self.ensure_guild(interaction.guild.id)
+
+        if tipo == "usuario" and usuario is None:
+            return await interaction.response.send_message("Debes seleccionar un usuario.", ephemeral=True)
+
+        if tipo == "rol" and rol is None:
+            return await interaction.response.send_message("Debes seleccionar un rol.", ephemeral=True)
+
         lista = cfg["whitelist_users"] if tipo == "usuario" else cfg["whitelist_roles"]
+        objetivo = usuario if tipo == "usuario" else rol
 
         if accion == "añadir":
             if objetivo.id not in lista:
@@ -136,6 +175,10 @@ class AntiLinks(commands.Cog):
 
         embed = discord.Embed(description=msg, color=discord.Color(0x0A3D62))
         await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    # ============================================================
+    # DETECCIÓN DE LINKS
+    # ============================================================
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -174,17 +217,37 @@ class AntiLinks(commands.Cog):
         self.warns[uid] = [t for t in self.warns[uid] if now - t <= 300]
         warn_count = len(self.warns[uid])
 
+        # PRIMER AVISO
         if warn_count == 1:
             embed = discord.Embed(
                 title="<a:warning:1485072594012209354> Enlace no permitido",
-                description=f"{user.mention}, has enviado un enlace que **no está permitido**. Evita repetirlo o se aplicará una sanción.",
+                description=(
+                    f"<a:link:1483506560935268452> {user.mention}, has enviado un enlace que **no está permitido**.\n"
+                    f"Evita repetirlo o se aplicará una sanción."
+                ),
                 color=discord.Color(0x0A3D62)
             )
             await message.channel.send(embed=embed)
-            await self.send_log(guild, cfg, embed)
+
+            log_embed = discord.Embed(
+                title="🔍 Anti‑Links | Advertencia registrada",
+                description=(
+                    f"Usuario: {user.mention}\n"
+                    f"Advertencia: 1/2\n"
+                    f"Motivo: Enlace bloqueado\n"
+                    f"Canal: {message.channel.mention}"
+                ),
+                color=discord.Color(0x0A3D62)
+            )
+            await self.send_log(guild, cfg, log_embed)
             return
 
+        # SEGUNDA VEZ → SANCIÓN
         await self.apply_action(message, cfg)
+
+    # ============================================================
+    # APLICAR SANCIÓN
+    # ============================================================
 
     async def apply_action(self, message: discord.Message, cfg):
         user = message.author
@@ -207,7 +270,10 @@ class AntiLinks(commands.Cog):
         if not sancionado:
             embed = discord.Embed(
                 title="<a:warning:1483506607265419466> Enlace detectado",
-                description=f"Detecté un enlace prohibido de {user.mention}, pero **no pude aplicar la sanción**.",
+                description=(
+                    f"<a:link:1483506560935268452> Detecté un enlace prohibido de {user.mention}, "
+                    f"pero **no pude aplicar la sanción**."
+                ),
                 color=discord.Color(0x0A3D62)
             )
             await message.channel.send(embed=embed)
@@ -216,7 +282,11 @@ class AntiLinks(commands.Cog):
 
         embed = discord.Embed(
             title="<a:advertencia:1483506898509758690> Sanción aplicada",
-            description=f"Usuario: {user.mention}\nAcción: **{action}**\nRazón: Enviar enlaces no permitidos.",
+            description=(
+                f"Usuario: {user.mention}\n"
+                f"Acción: **{action}**\n"
+                f"Razón: Enviar enlaces no permitidos <a:link:1483506560935268452>"
+            ),
             color=discord.Color(0x0A3D62)
         )
         await message.channel.send(embed=embed)
