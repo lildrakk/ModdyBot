@@ -117,7 +117,7 @@ class Giveaways(commands.Cog):
         guardar_giveaways(giveaways)
 
         embed = discord.Embed(
-            title="<:giveaway:1494074344341639188> **SORTEO ACTIVO** <:giveaway:1494074344341639188>",
+            title="<:giveaway:1494074344341639188> **SORTEO ACTIVO**",
             description=(
                 "<:regalo:1483506548495093957> ¡Un nuevo sorteo ha comenzado en el servidor!\n\n"
                 "**<a:fuegoazul:1483506592325439540> Cómo participar:**\n"
@@ -160,6 +160,12 @@ class Giveaways(commands.Cog):
 
         ganadores_finales = random.sample(participantes_validos, min(len(participantes_validos), data["ganadores"]))
 
+        # Construir texto según número de ganadores
+        if len(ganadores_finales) == 1:
+            texto_ganadores = f"<@{ganadores_finales[0]}>"
+        else:
+            texto_ganadores = " y ".join([f"<@{g}>" for g in ganadores_finales])
+
         resultado = discord.Embed(
             title="<:giveaway:1494074344341639188> **SORTEO FINALIZADO** <:giveaway:1494074344341639188>",
             description="¡Aquí están los ganadores!",
@@ -176,7 +182,7 @@ class Giveaways(commands.Cog):
 
         # Responder al mensaje original del sorteo
         await mensaje_obj.reply(
-            content=f"🎉 Felicitaciones <@{interaction.user.id}> y {' '.join([f'<@{g}>' for g in ganadores_finales])} 🎉",
+            content=f"🎉 <@{interaction.user.id}> los ganadores del sorteo fueron {texto_ganadores}",
             embed=resultado
         )
 
@@ -206,10 +212,13 @@ class Giveaways(commands.Cog):
         if len(participantes_validos) == 0:
             return await interaction.response.send_message("❌ No hay participantes válidos para reroll.", ephemeral=True)
 
-        ganadores_finales = random.sample(
-            participantes_validos,
-            min(len(participantes_validos), data["ganadores"])
-        )
+        ganadores_finales = random.sample(participantes_validos, min(len(participantes_validos), data["ganadores"]))
+
+        # Construir texto según número de ganadores
+        if len(ganadores_finales) == 1:
+            texto_ganadores = f"<@{ganadores_finales[0]}>"
+        else:
+            texto_ganadores = " y ".join([f"<@{g}>" for g in ganadores_finales])
 
         embed = discord.Embed(
             title="<a:alarmazul:1491858094043693177> **REROLL REALIZADO**",
@@ -227,19 +236,16 @@ class Giveaways(commands.Cog):
         embed.set_footer(text=f"ID del sorteo: {giveaway_id}")
         embed.set_image(url="https://raw.githubusercontent.com/lildrakk/ModdyBot-web/eb6b1cb04336b0929a83cacad3b6834d11cedf8c/standard-3.gif")
 
-        # Responder al mensaje original del sorteo si existe
         canal = self.bot.get_channel(data["canal"])
-        if canal:
-            await canal.send(
-                content=f"<:giveaway:1494074344341639188> Nuevos ganadores del sorteo <@{data['host']}>: {' '.join([f'<@{g}>' for g in ganadores_finales])}",
-                embed=embed
-            )
-        else:
-            await interaction.response.send_message(embed=embed)
+
+        await canal.send(
+            content=f"<:giveaway:1494074344341639188> <@{data['host']}> los nuevos ganadores del sorteo son {texto_ganadores}",
+            embed=embed
+        )
 
 # ============================
 # SETUP
 # ============================
 
 async def setup(bot):
-    await bot.add_cog(Giveaways(bot))
+    await bot.add_cog(Giveaways(bot)) 
