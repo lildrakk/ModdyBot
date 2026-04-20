@@ -1,247 +1,245 @@
 import discord
-from discord.ext import commands, tasks
-from discord import app_commands
+from discord.ext import commands
+import asyncio
+import random
+import datetime
 import json
 import os
-import asyncio
-import re
-import random
-from datetime import datetime, timedelta
 
-# Ruta correcta para Render
-BASE_DIR = os.path.dirname(os.path.dirname(__file__))
-GIVEAWAY_FILE = os.path.join(BASE_DIR, "giveaways.json")
+RUTA_JSON = "giveaways.json"
 
 # ============================
-# JSON LOADER
+# CARGAR / GUARDAR JSON
 # ============================
 
-def load_giveaways():
-    if not os.path.exists(GIVEAWAY_FILE):
-        with open(GIVEAWAY_FILE, "w") as f:
-            json.dump({}, f, indent=4)
-
-    with open(GIVEAWAY_FILE, "r") as f:
+def cargar_giveaways():
+    if not os.path.exists(RUTA_JSON):
+        with open(RUTA_JSON, "w") as f:
+            json.dump({}, f)
+    with open(RUTA_JSON, "r") as f:
         return json.load(f)
 
-
-def save_giveaways(data):
-    with open(GIVEAWAY_FILE, "w") as f:
+def guardar_giveaways(data):
+    with open(RUTA_JSON, "w") as f:
         json.dump(data, f, indent=4)
 
+giveaways = cargar_giveaways()
 
 # ============================
-# PARSEADOR DE TIEMPO
+# VIEW DEL BOTÓN DE PARTICIPAR (PERSISTENTE)
 # ============================
 
-def parse_time(tiempo: str):
-    tiempo = tiempo.lower()
-    pattern = r"(\d+)([smhd])"
-    matches = re.findall(pattern, tiempo)
-
-    if not matches:
-        return None
-
-    total = 0
-    for cantidad, unidad in matches:
-        cantidad = int(cantidad)
-        if unidad == "s":
-            total += cantidad
-        elif unidad == "m":
-            total += cantidad * 60
-        elif unidad == "h":
-            total += cantidad * 3600
-        elif unidad == "d":
-            total += cantidad * 86400
-
-    return total
-
-
-# ============================
-# BOTÓN DE PARTICIPAR
-# ============================
-
-class JoinButton(discord.ui.Button):
-    def __init__(self, giveaway_id):
-        super().__init__(label="🎉 Participar", style=discord.ButtonStyle.green)
-        self.giveaway_id = giveaway_id
-
-    async def callback(self, interaction: discord.Interaction):
-        data = load_giveaways()
-
-        if self.giveaway_id not in data:
-            return await interaction.response.send_message("❌ Este giveaway ya no existe.", ephemeral=True)
-
-        participantes = data[self.giveaway_id]["participantes"]
-
-        if interaction.user.id in participantes:
-            return await interaction.response.send_message("❌ Ya estás participando.", ephemeral=True)
-
-        participantes.append(interaction.user.id)
-        save_giveaways(data)
-
-        await interaction.response.send_message("🎉 ¡Estás participando!", ephemeral=True)
-
-
-class JoinView(discord.ui.View):
+class GiveawayView(discord.ui.View):
     def __init__(self, giveaway_id):
         super().__init__(timeout=None)
-        self.add_item(JoinButton(giveaway_id))
+        self.giveaway_id = str(giveaway_id)
 
+    @discord.ui.button(label="🎉 Participar", style=discord.ButtonStyle.blurple, custom_id="giveaway_participar")
+    async def participar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        data = giveaways.get(self.giveaway_id)
+
+        if not data:
+            return await interaction.response.send_message(
+                "❌ Este sorteo ya no existe.",
+                ephemeral=True
+            )
+
+        user = interaction.user
+
+        if str(user.id) in data["participantes"]:
+            return await interaction.response.send_message(
+                "❗ Ya estabas participando en este sorteo.",
+                ephemeral=True
+            )
+
+        data["participantes"].append(str(user.id))
+        guardar_giveaways(giveaways)
+
+        await interaction.response.send_message(
+            "🎉 ¡Has entrado correctamente al sorteo!",
+            ephemeral=True
+        )
 
 # ============================
 # COG PRINCIPAL
 # ============================
 
-class GiveawayCog(commands.Cog):
+class Giveaways(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.check_giveaways.start()
-
-        data = load_giveaways()
-        for g_id in data:
-            bot.add_view(JoinView(g_id))
 
     # ============================
-    # COMANDO PARA CREAR GIVEAWAY
+    # /giveaway
     # ============================
 
-    @app_commands.checks.has_permissions(administrator=True)
-    @app_commands.command(
-        name="gstart",
-        description="Crear un giveaway"
+    @discord.app_commands.command(
+        name="giveaway",
+        description="Crea un sorteo (10s, 5m, 2h, 1d)."
     )
-    @app_commands.describe(
-        titulo="Título del giveaway",
-        descripcion="Descripción del giveaway",
-        tiempo="Duración (ej: 10s, 5m, 2h, 1d)",
-        premio="Premio del giveaway",
+    @discord.app_commands.describe(
+        tiempo="Duración del sorteo (10s, 5m, 2h, 1d)",
         ganadores="Cantidad de ganadores",
-        imagen_url="URL de la imagen (opcional)",
-        imagen_archivo="Adjunta una imagen (opcional)"
+        premio="Premio del sorteo"
     )
-    async def gstart(
-        self,
-        interaction: discord.Interaction,
-        titulo: str,
-        descripcion: str,
-        tiempo: str,
-        premio: str,
-        ganadores: int,
-        imagen_url: str = None,
-        imagen_archivo: discord.Attachment = None
-    ):
+    async def giveaway(self, interaction: discord.Interaction, tiempo: str, ganadores: int, premio: str):
 
-        segundos = parse_time(tiempo)
-        if not segundos:
-            return await interaction.response.send_message("❌ Tiempo inválido.", ephemeral=True)
+        unidades = {"s": 1, "m": 60, "h": 3600, "d": 86400}
 
-        fin = datetime.utcnow() + timedelta(seconds=segundos)
+        if tiempo[-1].lower() not in unidades:
+            return await interaction.response.send_message(
+                "❌ Formato inválido. Usa: 10s, 5m, 2h, 1d",
+                ephemeral=True
+            )
 
-        giveaway_id = str(random.randint(100000, 999999))
+        try:
+            cantidad = int(tiempo[:-1])
+        except ValueError:
+            return await interaction.response.send_message(
+                "❌ El tiempo debe empezar con un número. Ejemplo: 10s",
+                ephemeral=True
+            )
 
-        data = load_giveaways()
-        data[giveaway_id] = {
-            "canal": interaction.channel.id,
+        duracion = cantidad * unidades[tiempo[-1].lower()]
+        fin = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=duracion)
+        timestamp = int(fin.timestamp())
+
+        giveaway_id = random.randint(100000, 999999)
+
+        giveaways[str(giveaway_id)] = {
+            "host": interaction.user.id,
             "premio": premio,
-            "fin": fin.timestamp(),
-            "ganadores": ganadores,
+            "fin": timestamp,
             "participantes": [],
-            "mensaje_id": None,
-            "imagen": None
+            "canal": interaction.channel.id,
+            "ganadores": ganadores
         }
 
-        # Imagen por URL
-        if imagen_url:
-            data[giveaway_id]["imagen"] = imagen_url
-
-        # Imagen adjunta
-        if imagen_archivo:
-            data[giveaway_id]["imagen"] = imagen_archivo.url
-
-        save_giveaways(data)
+        guardar_giveaways(giveaways)
 
         embed = discord.Embed(
-            title=titulo,
-            description=f"{descripcion}\n\n**Premio:** {premio}\n**Ganadores:** {ganadores}\n**Termina en:** {tiempo}",
-            color=discord.Color.random()
+            title="<:giveaway:1494074344341639188> **SORTEO ACTIVO** <:giveaway:1494074344341639188>",
+            description=(
+                "<:regalo:1483506548495093957> ¡Un nuevo sorteo ha comenzado en el servidor!\n\n"
+                "**<a:fuegoazul:1483506592325439540> Cómo participar:**\n"
+                "**1.** Pulsa el botón **Participar** de abajo\n"
+                "**2.** Quédate en el servidor durante todo el sorteo\n"
+                "**3.** Espera a que termine el tiempo\n\n"
+            ),
+            color=discord.Color(0x0A3D62)
         )
 
-        if data[giveaway_id]["imagen"]:
-            embed.set_image(url=data[giveaway_id]["imagen"])
+        embed.add_field(name="<a:flechazul:1492182951532826684> Premio", value=premio, inline=False)
+        embed.add_field(name="<a:fuegoazul:1483506592325439540> Ganadores", value=str(ganadores), inline=True)
+        embed.add_field(name="<:user:1488971290302877967> Organizado por", value=interaction.user.mention, inline=True)
+        embed.add_field(name="<:cronometro:1493972193598509056> Finaliza", value=f"<t:{timestamp}:R>", inline=False)
+        embed.set_footer(text=f"ID del sorteo: {giveaway_id}")
+        embed.set_image(url="https://raw.githubusercontent.com/lildrakk/ModdyBot-web/eb6b1cb04336b0929a83cacad3b6834d11cedf8c/standard-3.gif")
 
-        view = JoinView(giveaway_id)
-        msg = await interaction.channel.send(embed=embed, view=view)
+        view = GiveawayView(giveaway_id)
+        mensaje = await interaction.response.send_message(embed=embed, view=view)
+        mensaje_obj = await interaction.original_response()
 
-        data[giveaway_id]["mensaje_id"] = msg.id
-        save_giveaways(data)
+        # Esperar a que termine
+        await asyncio.sleep(duracion)
 
-        await interaction.response.send_message("🎉 Giveaway creado.", ephemeral=True)
+        data = giveaways.get(str(giveaway_id))
+        if not data:
+            return
+
+        # Filtrar participantes válidos
+        guild = interaction.guild
+        participantes_validos = [uid for uid in data["participantes"] if guild.get_member(int(uid)) is not None]
+        data["participantes"] = participantes_validos
+        guardar_giveaways(giveaways)
+
+        if len(participantes_validos) == 0:
+            await interaction.channel.send(f"<:no:1476336151835967640> Nadie participó en el sorteo **{giveaway_id}**.")
+            del giveaways[str(giveaway_id)]
+            guardar_giveaways(giveaways)
+            return
+
+        ganadores_finales = random.sample(participantes_validos, min(len(participantes_validos), data["ganadores"]))
+
+        resultado = discord.Embed(
+            title="<:giveaway:1494074344341639188> **SORTEO FINALIZADO** <:giveaway:1494074344341639188>",
+            description="¡Aquí están los ganadores!",
+            color=discord.Color(0x0A3D62)
+        )
+        resultado.add_field(name="<:regalo:1483506548495093957> Premio", value=data["premio"], inline=False)
+        resultado.add_field(
+            name="<a:flechazul:1492182951532826684> Ganadores",
+            value="\n".join([f"<@{g}>" for g in ganadores_finales]),
+            inline=False
+        )
+        resultado.set_footer(text=f"ID del sorteo: {giveaway_id}")
+        resultado.set_image(url="https://raw.githubusercontent.com/lildrakk/ModdyBot-web/eb6b1cb04336b0929a83cacad3b6834d11cedf8c/standard-3.gif")
+
+        # Responder al mensaje original del sorteo
+        await mensaje_obj.reply(
+            content=f"🎉 Felicitaciones <@{interaction.user.id}> y {' '.join([f'<@{g}>' for g in ganadores_finales])} 🎉",
+            embed=resultado
+        )
 
     # ============================
-    # CHECK AUTOMÁTICO
+    # /reroll
     # ============================
 
-    @tasks.loop(seconds=5)
-    async def check_giveaways(self):
-        data = load_giveaways()
-        ahora = datetime.utcnow().timestamp()
-
-        for g_id, info in list(data.items()):
-            if ahora >= info["fin"]:
-                canal = self.bot.get_channel(info["canal"])
-                if not canal:
-                    del data[g_id]
-                    save_giveaways(data)
-                    continue
-
-                participantes = info["participantes"]
-
-                if not participantes:
-                    await canal.send("❌ Nadie participó en el giveaway.")
-                    del data[g_id]
-                    save_giveaways(data)
-                    continue
-
-                ganadores = min(info["ganadores"], len(participantes))
-                seleccionados = random.sample(participantes, ganadores)
-
-                texto = "🎉 **Ganadores del giveaway:**\n"
-                for uid in seleccionados:
-                    user = canal.guild.get_member(uid)
-                    texto += f"• {user.mention}\n"
-
-                texto += f"\n**Premio:** {info['premio']}"
-
-                await canal.send(texto)
-
-                del data[g_id]
-                save_giveaways(data)
-
-    # ============================
-    # REROLL
-    # ============================
-
-    @app_commands.checks.has_permissions(administrator=True)
-    @app_commands.command(
-        name="greroll",
-        description="Hacer reroll de un giveaway terminado"
+    @discord.app_commands.command(
+        name="reroll",
+        description="Elige nuevos ganadores usando el ID del sorteo."
     )
-    @app_commands.describe(
-        participantes="Lista de IDs separados por coma"
+    @discord.app_commands.describe(
+        giveaway_id="ID del sorteo (lo ves en el embed)"
     )
-    async def greroll(self, interaction: discord.Interaction, participantes: str):
+    async def reroll(self, interaction: discord.Interaction, giveaway_id: int):
+        data = giveaways.get(str(giveaway_id))
+        if not data:
+            return await interaction.response.send_message("❌ Ese ID de sorteo no existe.", ephemeral=True)
+        if interaction.user.id != data["host"]:
+            return await interaction.response.send_message("❌ Solo el creador del sorteo puede hacer reroll.", ephemeral=True)
 
-        ids = [int(x.strip()) for x in participantes.split(",")]
+        guild = interaction.guild
+        participantes_validos = [uid for uid in data["participantes"] if guild.get_member(int(uid)) is not None]
+        data["participantes"] = participantes_validos
+        guardar_giveaways(giveaways)
 
-        if not ids:
-            return await interaction.response.send_message("❌ Lista inválida.", ephemeral=True)
+        if len(participantes_validos) == 0:
+            return await interaction.response.send_message("❌ No hay participantes válidos para reroll.", ephemeral=True)
 
-        ganador_id = random.choice(ids)
-        ganador = interaction.guild.get_member(ganador_id)
+        ganadores_finales = random.sample(
+            participantes_validos,
+            min(len(participantes_validos), data["ganadores"])
+        )
 
-        await interaction.response.send_message(f"🔄 Nuevo ganador: {ganador.mention}")
+        embed = discord.Embed(
+            title="<a:alarmazul:1491858094043693177> **REROLL REALIZADO**",
+            description="Se han elegido nuevos ganadores",
+            color=discord.Color(0x0A3D62)
+        )
 
+        embed.add_field(name="<:regalo:1483506548495093957> Premio", value=data["premio"], inline=False)
+        embed.add_field(
+            name="<a:flechazul:1491858094043693177> Nuevos ganadores",
+            value="\n".join([f"<@{g}>" for g in ganadores_finales]),
+            inline=False
+        )
+
+        embed.set_footer(text=f"ID del sorteo: {giveaway_id}")
+        embed.set_image(url="https://raw.githubusercontent.com/lildrakk/ModdyBot-web/eb6b1cb04336b0929a83cacad3b6834d11cedf8c/standard-3.gif")
+
+        # Responder al mensaje original del sorteo si existe
+        canal = self.bot.get_channel(data["canal"])
+        if canal:
+            await canal.send(
+                content=f"<:giveaway:1494074344341639188> Nuevos ganadores del sorteo <@{data['host']}>: {' '.join([f'<@{g}>' for g in ganadores_finales])}",
+                embed=embed
+            )
+        else:
+            await interaction.response.send_message(embed=embed)
+
+# ============================
+# SETUP
+# ============================
 
 async def setup(bot):
-    await bot.add_cog(GiveawayCog(bot))
+    await bot.add_cog(Giveaways(bot))
