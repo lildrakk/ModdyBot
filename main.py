@@ -110,7 +110,7 @@ class Bot(commands.Bot):
         print("==============================\n")
 
         # -----------------------------------------
-        # NUEVO: DETECTOR DE ERRORES EN SLASH COMMANDS
+        # DETECTOR DE ERRORES EN SLASH COMMANDS
         # -----------------------------------------
         print("\n🔍 Verificando comandos slash...\n")
 
@@ -128,40 +128,6 @@ class Bot(commands.Bot):
                 _ = cmd.name
             except Exception as e:
                 print(f"❌ ERROR en el comando {cmd.name}: {e}")
-
-
-    # -----------------------------------------
-    # FUNCIÓN NUEVA: RECARGAR MÓDULOS EN CALIENTE
-    # -----------------------------------------
-    async def load_modules_for_version(self):
-        versions = load_versions()
-        owner_version = versions["dev"]
-
-        print(f"\n🔥 Recargando módulos para versión {owner_version}...\n")
-
-        for ext in list(self.extensions.keys()):
-            try:
-                await self.unload_extension(ext)
-                print(f"⏏️ Descargado: {ext}")
-            except Exception as e:
-                print(f"❌ Error descargando {ext}: {e}")
-
-        modules = get_modules_for_version(owner_version)
-
-        for module in modules:
-            try:
-                await self.load_extension(f"cogs.{module}")
-                print(f"✔ Cargado: {module}.py")
-            except Exception as e:
-                print(f"❌ Error cargando {module}: {e}")
-
-        try:
-            synced = await self.tree.sync()
-            print(f"🌐 Comandos sincronizados: {len(synced)}")
-        except Exception as e:
-            print(f"❌ Error al sincronizar comandos: {e}")
-
-        print("\n✅ Módulos recargados correctamente.\n")
 
 
 bot = Bot()
