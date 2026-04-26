@@ -47,6 +47,8 @@ VERSION_NEW = {
     "v1.1.2": ["antiping",
                "statuspanel",
                "giveaways",
+               "premium",
+               "backups",
     ]
 }
 
@@ -107,6 +109,27 @@ class Bot(commands.Bot):
         print(f"🛠️ Versión dev: {versions['dev']}")
         print("==============================\n")
 
+        # -----------------------------------------
+        # NUEVO: DETECTOR DE ERRORES EN SLASH COMMANDS
+        # -----------------------------------------
+        print("\n🔍 Verificando comandos slash...\n")
+
+        try:
+            synced = await self.tree.sync()
+            print(f"🌐 Comandos sincronizados: {len(synced)}")
+        except Exception as e:
+            print("❌ ERROR SINCRONIZANDO COMANDOS:")
+            print(e)
+
+        print("\n🔍 Revisando errores internos de comandos...\n")
+
+        for cmd in self.tree.walk_commands():
+            try:
+                _ = cmd.name
+            except Exception as e:
+                print(f"❌ ERROR en el comando {cmd.name}: {e}")
+
+
     # -----------------------------------------
     # FUNCIÓN NUEVA: RECARGAR MÓDULOS EN CALIENTE
     # -----------------------------------------
@@ -116,15 +139,13 @@ class Bot(commands.Bot):
 
         print(f"\n🔥 Recargando módulos para versión {owner_version}...\n")
 
-        # Descargar módulos actuales
         for ext in list(self.extensions.keys()):
             try:
                 await self.unload_extension(ext)
-                print(f"⏏ Descargado: {ext}")
+                print(f"⏏️ Descargado: {ext}")
             except Exception as e:
                 print(f"❌ Error descargando {ext}: {e}")
 
-        # Cargar módulos nuevos
         modules = get_modules_for_version(owner_version)
 
         for module in modules:
@@ -134,7 +155,11 @@ class Bot(commands.Bot):
             except Exception as e:
                 print(f"❌ Error cargando {module}: {e}")
 
-        await self.tree.sync()
+        try:
+            synced = await self.tree.sync()
+            print(f"🌐 Comandos sincronizados: {len(synced)}")
+        except Exception as e:
+            print(f"❌ Error al sincronizar comandos: {e}")
 
         print("\n✅ Módulos recargados correctamente.\n")
 
@@ -146,14 +171,24 @@ bot = Bot()
 async def on_ready():
     print(f"🤖 Bot conectado como {bot.user}")
 
-    # 🔵 REGISTRAR BOTÓN PERSISTENTE
+    # 🔗 Registrar botón persistente
     bot.add_view(GiveawayView(giveaway_id=None))
 
     try:
         synced = await bot.tree.sync()
-        print(f"📚 Slash commands sincronizados: {len(synced)}")
+        print(f"📘 Slash commands sincronizados: {len(synced)}")
     except Exception as e:
         print(f"❌ Error al sincronizar comandos: {e}")
+
+    # ============================
+    # LISTAR TODOS LOS COMANDOS
+    # ============================
+    print("\n📦 LISTA DE COMANDOS DISPONIBLES:\n")
+
+    for cmd in bot.tree.get_commands():
+        print(f" • {cmd.name}")
+
+    print(f"\n✔ Total comandos: {len(bot.tree.get_commands())}\n")
 
 
 TOKEN = os.getenv("TOKEN")
