@@ -134,18 +134,18 @@ bot = Bot()
 
 
 # ============================
-# FUNCIÓN: ACTUALIZAR SOBRE MÍ
+# ESTADO DINÁMICO
 # ============================
 
-async def actualizar_sobre_mi():
+async def actualizar_estado():
     servidores = len(bot.guilds)
-    about_me = f"¡/help para comenzar! — Protegiendo a {servidores} servidores"
-
-    try:
-        await bot.user.edit(bio=about_me)
-        print(f"✔ Sobre mí actualizado: {about_me}")
-    except Exception as e:
-        print(f"❌ No se pudo actualizar el sobre mí: {e}")
+    await bot.change_presence(
+        activity=discord.Activity(
+            type=discord.ActivityType.playing,
+            name=f"¡/help para comenzar! — protegiendo a {servidores} servidores"
+        )
+    )
+    print(f"✔ Estado actualizado: Jugando a ¡/help para comenzar! — protegiendo a {servidores} servidores")
 
 
 # ============================
@@ -176,19 +176,19 @@ async def on_ready():
     print(f"\n✔ Total comandos: {len(bot.tree.get_commands())}\n")
 
     # ============================
-    # ACTUALIZAR SOBRE MÍ AL INICIAR
+    # ACTUALIZAR ESTADO AL INICIAR
     # ============================
-    await actualizar_sobre_mi()
+    await actualizar_estado()
 
 
 @bot.event
 async def on_guild_join(guild):
-    await actualizar_sobre_mi()
+    await actualizar_estado()
 
 
 @bot.event
 async def on_guild_remove(guild):
-    await actualizar_sobre_mi()
+    await actualizar_estado()
 
 
 # ============================
@@ -202,4 +202,4 @@ if not TOKEN:
 else:
     print("✔ TOKEN encontrado, iniciando bot...")
 
-bot.run(TOKEN)
+bot.run(TOKEN) 
