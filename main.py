@@ -133,6 +133,25 @@ class Bot(commands.Bot):
 bot = Bot()
 
 
+# ============================
+# FUNCIÓN: ACTUALIZAR SOBRE MÍ
+# ============================
+
+async def actualizar_sobre_mi():
+    servidores = len(bot.guilds)
+    about_me = f"¡/help para comenzar! — Protegiendo a {servidores} servidores"
+
+    try:
+        await bot.user.edit(bio=about_me)
+        print(f"✔ Sobre mí actualizado: {about_me}")
+    except Exception as e:
+        print(f"❌ No se pudo actualizar el sobre mí: {e}")
+
+
+# ============================
+# EVENTOS
+# ============================
+
 @bot.event
 async def on_ready():
     print(f"🤖 Bot conectado como {bot.user}")
@@ -156,6 +175,25 @@ async def on_ready():
 
     print(f"\n✔ Total comandos: {len(bot.tree.get_commands())}\n")
 
+    # ============================
+    # ACTUALIZAR SOBRE MÍ AL INICIAR
+    # ============================
+    await actualizar_sobre_mi()
+
+
+@bot.event
+async def on_guild_join(guild):
+    await actualizar_sobre_mi()
+
+
+@bot.event
+async def on_guild_remove(guild):
+    await actualizar_sobre_mi()
+
+
+# ============================
+# INICIAR BOT
+# ============================
 
 TOKEN = os.getenv("TOKEN")
 
@@ -164,4 +202,4 @@ if not TOKEN:
 else:
     print("✔ TOKEN encontrado, iniciando bot...")
 
-bot.run(TOKEN) 
+bot.run(TOKEN)
