@@ -75,16 +75,6 @@ def is_premium(user_id: int):
     return ahora < expira
 
 # ============================
-# LISTA DE COMANDOS PREMIUM
-# ============================
-
-PREMIUM_COMMANDS = [
-    "botinfo",
-    # "backup_restaurar",
-    # "verificacion",
-]
-
-# ============================
 # EMBEDS PREMIUM
 # ============================
 
@@ -159,34 +149,6 @@ class Premium(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.check_expirations.start()
-
-    # ============================
-    # LISTENER GLOBAL PREMIUM
-    # ============================
-
-    @commands.Cog.listener()
-    async def on_interaction(self, interaction: discord.Interaction):
-
-        if interaction.type != discord.InteractionType.application_command:
-            return
-
-        comando = interaction.command.name
-
-        if comando not in PREMIUM_COMMANDS:
-            return
-
-        if is_premium(interaction.user.id):
-            return
-
-        try:
-            await interaction.response.send_message(
-                embed=embed_premium_required(),
-                ephemeral=True
-            )
-        except:
-            pass
-
-        raise Exception("PREMIUM_BLOCKED")
 
     # ============================
     # TAREA AUTOMÁTICA EXPIRACIONES
