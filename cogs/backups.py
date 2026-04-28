@@ -1,404 +1,610 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
-import os
 import json
-import asyncio
-from datetime import datetime
+import os
+import datetime
+import aiohttp
+import io
 
-# ============================
-# RUTA CORRECTA PARA RENDER
-# ============================
+from cogs.premium import is_premium
+from cogs.logs import UltraLogs
 
-BASE_DIR = os.path.dirname(os.path.dirname(__file__))
+# ============================================================
+# CONSTANTES
+# ============================================================
 
-def get_paths(user_id):
-    folder = os.path.join(BASE_DIR, "backups", str(user_id))
-    path = os.path.join(folder, "backups.json")
-    return folder, path
+BACKUP_FILE = "backups.json"
+COOLDOWN_FILE = "cooldowns.json"
+COLOR = discord.Color(0x0A3D62)
 
-# ============================
-# JSON LOADERS
-# ============================
+# ============================================================
+# FUNCIONES UTILITARIAS (JSON)
+# ============================================================
 
-def load_backups(user_id):
-    folder, path = get_paths(user_id)
-
-    if not os.path.exists(folder):
-        os.makedirs(folder)
-
+def load_json(path, default):
     if not os.path.exists(path):
-        data = {"backups": []}
         with open(path, "w") as f:
-            json.dump(data, f, indent=4)
-        return data
-
+            json.dump(default, f)
     with open(path, "r") as f:
         return json.load(f)
 
-
-def save_backups(user_id, data):
-    folder, path = get_paths(user_id)
-
-    if not os.path.exists(folder):
-        os.makedirs(folder)
-
+def save_json(path, data):
     with open(path, "w") as f:
         json.dump(data, f, indent=4)
 
+backups = load_json(BACKUP_FILE, {})
+cooldowns = load_json(COOLDOWN_FILE, {})
 
-# ============================
-# COG DE BACKUPS
-# ============================
+# ============================================================
+# COOLDOWN
+# ============================================================
 
-class BackupsCog(commands.Cog):
-    def __init__(self, bot):
-        self.bot = bot
+def can_create_backup(user_id: int):
+    user_id_str = str(user_id)
+    ahora = int(datetime.datetime.utcnow().timestamp())
 
-    # ============================
-    # BACKUP CREAR
-    # ============================
+    if user_id_str not in cooldowns:
+        return True, None
 
-    @app_commands.command(
-        name="backup_crear",
-        description="Crea un backup del servidor"
-    )
-    async def backup_crear(self, interaction: discord.Interaction):
+    ultimo = cooldowns[user_id_str].get("last_backup", 0)
 
-        guild = interaction.guild
-        user = interaction.user
-        user_id = user.id
+    # PREMIUM → 5 minutos
+    if is_premium(user_id):
+        if ahora - ultimo < 300:
+            faltan = 300 - (ahora - ultimo)
+            minutos = int(faltan / 60) + 1
+            return False, f"🛠️ Podrás crear otro backup en **{minutos} minutos**."
+        return True, None
 
-        # Permisos
-        if not (user.guild_permissions.administrator or user.guild_permissions.manage_guild):
-            return await interaction.response.send_message(
-                "❌ No tienes permiso para crear backups del servidor.",
-                ephemeral=True
-            )
+    # FREE → 3 días
+    if ahora - ultimo < 259200:
+        faltan = 259200 - (ahora - ultimo)
+        dias = int(faltan / 86400)
+        horas = int((faltan % 86400) / 3600)
+        return False, f"⏳ Te faltan **{dias} días y {horas} horas** para crear otro backup."
 
-        await interaction.response.send_message(
-            "📦 Creando backup ordenado...",
-            ephemeral=True
+    return True, None
+
+def register_backup(user_id: int):
+    cooldowns[str(user_id)] = {"last_backup": int(datetime.datetime.utcnow().timestamp())}
+    save_json(COOLDOWN_FILE, cooldowns)
+
+# ============================================================
+# AUTO-LIMPIEZA (LÍMITE SOLO PARA FREE)
+# ============================================================
+
+async def auto_cleanup(interaction, logs_cog: UltraLogs):
+    MAX_BACKUPS = 15
+
+    # PREMIUM → ilimitado
+    if is_premium(interaction.user.id):
+        return
+
+    user_backups = [name for name, data in backups.items() if data["created_by"] == interaction.user.id]
+
+    if len(user_backups) <= MAX_BACKUPS:
+        return
+
+    user_backups.sort(key=lambda n: backups[n]["created_at"])
+    eliminar = len(user_backups) - MAX_BACKUPS
+
+    for i in range(eliminar):
+        nombre = user_backups[i]
+        data = backups[nombre]
+
+        embed = discord.Embed(
+            title="🗑️ Backup eliminado automáticamente",
+            description=(
+                f"📦 **{nombre}**\n"
+                f"👤 Creador: <@{data['created_by']}>\n"
+                f"📅 Fecha: <t:{data['created_at']}:F>"
+            ),
+            color=COLOR
         )
 
         try:
-            data = load_backups(user_id)
-            backup_id = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            await logs_cog.send_log(interaction.guild, embed, "server_update")
+        except:
+            pass
 
-            backup = {
-                "id": backup_id,
-                "roles": [],
-                "channels": []
-            }
+        del backups[nombre]
 
-            # -----------------------------
-            # GUARDAR ROLES
-            # -----------------------------
-            for role in sorted(guild.roles, key=lambda r: r.position):
-                if role.is_default():
+    save_json(BACKUP_FILE, backups)
+
+# ============================================================
+# UI SELECT
+# ============================================================
+
+class BackupSelect(discord.ui.Select):
+    def __init__(self):
+        opciones = [
+            discord.SelectOption(label="Roles", value="roles", emoji="🧩"),
+            discord.SelectOption(label="Canales", value="canales", emoji="📁"),
+            discord.SelectOption(label="Categorías", value="categorias", emoji="🗂️"),
+            discord.SelectOption(label="Emojis", value="emojis", emoji="🎨"),
+            discord.SelectOption(label="Stickers", value="stickers", emoji="🪅"),
+        ]
+
+        super().__init__(
+            placeholder="Selecciona qué quieres guardar...",
+            min_values=1,
+            max_values=5,
+            options=opciones
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        self.view.seleccion = self.values
+
+        embed = discord.Embed(
+            title="📦 Componentes seleccionados",
+            description="Pulsa **Crear Backup** para continuar.",
+            color=COLOR
+        )
+        embed.add_field(name="Seleccionado:", value="\n".join([f"• {v}" for v in self.values]))
+
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+# ============================================================
+# UI VIEW
+# ============================================================
+
+class BackupView(discord.ui.View):
+    def __init__(self, nombre):
+        super().__init__(timeout=120)
+        self.nombre = nombre
+        self.seleccion = []
+        self.add_item(BackupSelect())
+
+    @discord.ui.button(label="Crear Backup", style=discord.ButtonStyle.green, emoji="📦")
+    async def crear(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        print("[BACKUPS] Ejecutando botón Crear Backup...")
+
+        if not self.seleccion:
+            return await interaction.response.send_message("❌ Selecciona al menos un componente.", ephemeral=True)
+
+        puede, razon = can_create_backup(interaction.user.id)
+        if not puede:
+            return await interaction.response.send_message(razon, ephemeral=True)
+
+        guild = interaction.guild
+
+        data = {
+            "guild_id": guild.id,
+            "guild_name": guild.name,
+            "created_by": interaction.user.id,
+            "created_at": int(datetime.datetime.utcnow().timestamp()),
+            "components": self.seleccion,
+            "data": {}
+        }
+
+        # ROLES
+        if "roles" in self.seleccion:
+            roles_data = []
+            for r in guild.roles:
+                if r.is_default():
+                    continue
+                roles_data.append({
+                    "name": r.name,
+                    "color": r.color.value,
+                    "hoist": r.hoist,
+                    "mentionable": r.mentionable,
+                    "position": r.position
+                })
+            data["data"]["roles"] = roles_data
+
+        # CATEGORÍAS
+        if "categorias" in self.seleccion:
+            data["data"]["categorias"] = [
+                {"name": c.name, "position": c.position}
+                for c in guild.categories
+            ]
+
+        # CANALES
+        if "canales" in self.seleccion:
+            canales = []
+            for ch in guild.channels:
+                if isinstance(ch, discord.CategoryChannel):
                     continue
 
-                backup["roles"].append({
-                    "name": role.name,
-                    "color": role.color.value,
-                    "permissions": role.permissions.value,
-                    "position": role.position
+                tipo = (
+                    "texto" if isinstance(ch, discord.TextChannel) else
+                    "voz" if isinstance(ch, discord.VoiceChannel) else
+                    "foro" if isinstance(ch, discord.ForumChannel) else
+                    "stage" if isinstance(ch, discord.StageChannel) else
+                    "otro"
+                )
+
+                canales.append({
+                    "name": ch.name,
+                    "type": tipo,
+                    "topic": getattr(ch, "topic", None),
+                    "nsfw": getattr(ch, "nsfw", False),
+                    "slowmode": getattr(ch, "slowmode_delay", 0),
+                    "bitrate": getattr(ch, "bitrate", None),
+                    "user_limit": getattr(ch, "user_limit", None),
+                    "category": ch.category.name if ch.category else None
                 })
 
-            # -----------------------------
-            # GUARDAR CATEGORÍAS Y CANALES
-            # -----------------------------
-            for category in sorted(guild.categories, key=lambda c: c.position):
+            data["data"]["canales"] = canales
 
-                backup["channels"].append({
-                    "name": category.name,
-                    "type": "category",
-                    "category": None,
-                    "position": category.position
-                })
+        # EMOJIS
+        if "emojis" in self.seleccion:
+            data["data"]["emojis"] = [{"name": e.name, "url": str(e.url)} for e in guild.emojis]
 
-                for channel in sorted(category.channels, key=lambda c: c.position):
+        # STICKERS
+        if "stickers" in self.seleccion:
+            data["data"]["stickers"] = [
+                {
+                    "name": s.name,
+                    "description": s.description,
+                    "format": s.format.name,
+                    "url": str(s.url)
+                }
+                for s in guild.stickers
+            ]
 
-                    tipo = "text"
-                    if isinstance(channel, discord.VoiceChannel):
-                        tipo = "voice"
-                    elif isinstance(channel, discord.StageChannel):
-                        tipo = "stage"
-                    elif isinstance(channel, discord.ForumChannel):
-                        tipo = "forum"
+        backups[self.nombre] = data
+        save_json(BACKUP_FILE, backups)
 
-                    backup["channels"].append({
-                        "name": channel.name,
-                        "type": tipo,
-                        "category": category.name,
-                        "position": channel.position
-                    })
+        register_backup(interaction.user.id)
 
-            # -----------------------------
-            # CANALES SIN CATEGORÍA
-            # -----------------------------
-            for channel in sorted(guild.channels, key=lambda c: c.position):
-                if channel.category is None and not isinstance(channel, discord.CategoryChannel):
+        logs_cog = interaction.client.get_cog("UltraLogs")
+        await auto_cleanup(interaction, logs_cog)
 
-                    tipo = "text"
-                    if isinstance(channel, discord.VoiceChannel):
-                        tipo = "voice"
-                    elif isinstance(channel, discord.StageChannel):
-                        tipo = "stage"
-                    elif isinstance(channel, discord.ForumChannel):
-                        tipo = "forum"
-
-                    backup["channels"].append({
-                        "name": channel.name,
-                        "type": tipo,
-                        "category": None,
-                        "position": channel.position
-                    })
-
-            # Guardar backup
-            data["backups"].append(backup)
-            save_backups(user_id, data)
-
-            await interaction.followup.send(
-                f"✅ **Backup creado correctamente**\n🆔 ID: `{backup_id}`",
-                ephemeral=True
-            )
-
-        except Exception as e:
-            print(f"Error en backup_crear: {e}")
-            await interaction.followup.send(
-                "❌ **Hubo un error al crear el backup.**\n"
-                "🔁 Inténtalo de nuevo.\n"
-                "🆘 Si el error persiste, únete al servidor de soporte:\n"
-                "https://discord.gg/qrMnzGztm3",
-                ephemeral=True
-            )
-
-    # ============================
-    # BACKUP RESTAURAR
-    # ============================
-
-    @app_commands.command(
-        name="backup_restaurar",
-        description="Restaura un backup del servidor (TOTAL A1)"
-    )
-    @app_commands.describe(
-        backup_id="ID del backup a restaurar"
-    )
-    async def backup_restaurar(self, interaction: discord.Interaction, backup_id: str):
-
-        guild = interaction.guild
-        user = interaction.user
-        user_id = user.id
-
-        # Permisos
-        if not (user.guild_permissions.administrator or user.guild_permissions.manage_guild):
-            return await interaction.response.send_message(
-                "❌ No tienes permiso para restaurar backups del servidor.",
-                ephemeral=True
-            )
-
-        await interaction.response.send_message(
-            "⏳ Restaurando backup... Esto puede tardar unos segundos.",
-            ephemeral=True
+        embed = discord.Embed(
+            title="🎉 Backup creado",
+            description=f"El backup **{self.nombre}** ha sido guardado.",
+            color=COLOR
         )
 
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
+
+# ============================================================
+# FUNCIÓN RESTAURAR
+# ============================================================
+
+async def restore_backup(interaction, nombre, data):
+
+    guild = interaction.guild
+    canal_log = interaction.channel
+    no_restaurado = []
+
+    await canal_log.send(
+        "⚠️ **ATENCIÓN**\n"
+        "Restaurar este backup borrará **TODOS los canales y categorías** del servidor,\n"
+        "excepto este canal donde estás ejecutando el comando.\n\n"
+        "Aquí se mostrará un registro en tiempo real de todo lo que el bot va haciendo."
+    )
+
+    await canal_log.send("🛠️ **Iniciando restauración...**\nEste canal no será borrado.")
+
+    # BORRAR CANALES
+    await canal_log.send("🧹 **Eliminando canales...**")
+    for ch in guild.channels:
+        if ch.id == canal_log.id:
+            continue
         try:
-            data = load_backups(user_id)
+            await ch.delete()
+        except:
+            no_restaurado.append(f"Canal: {ch.name}")
 
-            backup = next((b for b in data["backups"] if b["id"] == backup_id), None)
+    # BORRAR CATEGORÍAS
+    await canal_log.send("🗂️ **Eliminando categorías...**")
+    for c in guild.categories:
+        try:
+            await c.delete()
+        except:
+            no_restaurado.append(f"Categoría: {c.name}")
 
-            if not backup:
-                return await interaction.followup.send(
-                    "❌ No se encontró un backup con ese ID.",
+    # BORRAR ROLES (solo los que el bot puede gestionar)
+    await canal_log.send("🎭 **Eliminando roles...**")
+    bot_role_position = guild.me.top_role.position
+    for r in guild.roles:
+        if r.is_default():
+            continue
+        if r.position >= bot_role_position:
+            continue
+        try:
+            await r.delete()
+        except:
+            no_restaurado.append(f"Rol: {r.name}")
+
+    # RESTAURAR CATEGORÍAS
+    categorias_creadas = {}
+    if "categorias" in data["components"]:
+        await canal_log.send("📁 **Restaurando categorías...**")
+        for c in sorted(data["data"]["categorias"], key=lambda x: x["position"]):
+            try:
+                nueva = await guild.create_category(name=c["name"])
+                categorias_creadas[c["name"]] = nueva
+            except:
+                no_restaurado.append(f"Categoría: {c['name']}")
+
+    # RESTAURAR CANALES
+    if "canales" in data["components"]:
+        await canal_log.send("📨 **Restaurando canales...**")
+        for ch in data["data"]["canales"]:
+            try:
+                categoria = categorias_creadas.get(ch["category"], None)
+
+                if ch["type"] == "texto":
+                    await guild.create_text_channel(
+                        name=ch["name"],
+                        topic=ch["topic"],
+                        nsfw=ch["nsfw"],
+                        slowmode_delay=ch["slowmode"],
+                        category=categoria
+                    )
+
+                elif ch["type"] == "voz":
+                    await guild.create_voice_channel(
+                        name=ch["name"],
+                        user_limit=ch["user_limit"],
+                        bitrate=ch["bitrate"],
+                        category=categoria
+                    )
+
+                elif ch["type"] == "foro":
+                    await guild.create_forum_channel(name=ch["name"], category=categoria)
+
+                elif ch["type"] == "stage":
+                    await guild.create_stage_channel(name=ch["name"], category=categoria)
+
+            except:
+                no_restaurado.append(f"Canal: {ch['name']}")
+
+    # RESTAURAR ROLES
+    if "roles" in data["components"] and "roles" in data["data"]:
+        await canal_log.send("🎭 **Restaurando roles...**")
+        bot_role_position = guild.me.top_role.position
+        roles_creados = []
+
+        # Crear roles
+        for r in sorted(data["data"]["roles"], key=lambda x: x["position"]):
+            try:
+                nuevo = await guild.create_role(
+                    name=r["name"],
+                    colour=discord.Color(r["color"]),
+                    hoist=r["hoist"],
+                    mentionable=r["mentionable"]
+                )
+                roles_creados.append((nuevo, r["position"]))
+            except:
+                no_restaurado.append(f"Rol: {r['name']}")
+
+        # Ajustar posiciones (si se puede)
+        for rol, pos in roles_creados:
+            try:
+                if pos < bot_role_position:
+                    await rol.edit(position=pos)
+            except:
+                no_restaurado.append(f"Rol (posición): {rol.name}")
+
+    # RESTAURAR EMOJIS
+    if "emojis" in data["components"] and "emojis" in data["data"]:
+        await canal_log.send("🎨 **Restaurando emojis...**")
+        async with aiohttp.ClientSession() as session:
+            for e in data["data"]["emojis"]:
+                try:
+                    async with session.get(e["url"]) as resp:
+                        img = await resp.read()
+                    await guild.create_custom_emoji(name=e["name"], image=img)
+                except:
+                    no_restaurado.append(f"Emoji: {e['name']}")
+
+    # RESTAURAR STICKERS (intento, si falla → no restaurado)
+    if "stickers" in data["components"] and "stickers" in data["data"]:
+        await canal_log.send("🪅 **Restaurando stickers...**")
+        async with aiohttp.ClientSession() as session:
+            for s in data["data"]["stickers"]:
+                try:
+                    async with session.get(s["url"]) as resp:
+                        img = await resp.read()
+
+                    file = discord.File(io.BytesIO(img), filename=f"{s['name']}.png")
+                    await guild.create_sticker(
+                        name=s["name"],
+                        description=s["description"] or "Sticker restaurado",
+                        emoji="🙂",
+                        file=file
+                    )
+                except:
+                    no_restaurado.append(f"Sticker: {s['name']}")
+
+    # REPORTE FINAL
+    reporte = "```\n"
+    for x in no_restaurado:
+        reporte += f"- {x}\n"
+    reporte += "```"
+
+    embed = discord.Embed(
+        title="🔧 Backup restaurado",
+        description=f"Backup **{nombre}** restaurado.",
+        color=COLOR
+    )
+    embed.add_field(name="No restaurado:", value=reporte if no_restaurado else "Todo restaurado correctamente.")
+
+    await interaction.followup.send(embed=embed, ephemeral=True)
+
+# ============================================================
+# CONFIRM RESTORE VIEW
+# ============================================================
+
+class ConfirmRestore(discord.ui.View):
+    def __init__(self, nombre, data):
+        super().__init__(timeout=60)
+        self.nombre = nombre
+        self.data = data
+
+    @discord.ui.button(label="Confirmar", style=discord.ButtonStyle.red, emoji="⚠️")
+    async def confirmar(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        # Solo owner del servidor
+        if interaction.user.id != interaction.guild.owner_id:
+            return await interaction.response.send_message("❌ Solo el dueño del servidor puede restaurar.", ephemeral=True)
+
+        # FREE → solo en el servidor original
+        if not is_premium(interaction.user.id):
+            if interaction.guild.id != self.data["guild_id"]:
+                return await interaction.response.send_message(
+                    "❌ Este backup pertenece a otro servidor.\n"
+                    "Solo los usuarios premium pueden restaurarlo en servidores distintos.",
                     ephemeral=True
                 )
 
-            # -----------------------------
-            # 1. BORRAR CANALES
-            # -----------------------------
-            for channel in guild.channels:
-                try:
-                    await channel.delete()
-                except:
-                    pass
+        await interaction.response.defer(ephemeral=True)
+        await restore_backup(interaction, self.nombre, self.data)
 
-            # -----------------------------
-            # 2. BORRAR ROLES (menos @everyone)
-            # -----------------------------
-            for role in guild.roles:
-                if role.is_default():
-                    continue
-                try:
-                    await role.delete()
-                except:
-                    pass
+    @discord.ui.button(label="Cancelar", style=discord.ButtonStyle.gray, emoji="❌")
+    async def cancelar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("❌ Restauración cancelada.", ephemeral=True)
 
-            # -----------------------------
-            # 3. CREAR ROLES DEL BACKUP
-            # -----------------------------
-            new_roles = {}
+# ============================================================
+# COG PRINCIPAL
+# ============================================================
 
-            for role_data in sorted(backup["roles"], key=lambda r: r["position"]):
-                new_role = await guild.create_role(
-                    name=role_data["name"],
-                    color=discord.Color(role_data["color"]),
-                    permissions=discord.Permissions(role_data["permissions"])
-                )
-                new_roles[role_data["name"]] = new_role
+class Backups(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
 
-            # -----------------------------
-            # 4. CREAR CATEGORÍAS
-            # -----------------------------
-            categories = {}
+        print("\n[BACKUPS] Verificando comandos registrados...")
+        for cmd in bot.tree.walk_commands():
+            if cmd.name.startswith("backup"):
+                print(f"[BACKUPS] Detectado: /{cmd.name}")
+        print("[BACKUPS] Verificación completada.\n")
 
-            for ch in backup["channels"]:
-                if ch["type"] == "category":
-                    try:
-                        cat = await guild.create_category(
-                            name=ch["name"],
-                            position=ch["position"]
-                        )
-                        categories[ch["name"]] = cat
-                        await asyncio.sleep(1)
-                    except:
-                        pass
+    # ============================================================
+    # /backup_crear
+    # ============================================================
 
-            # -----------------------------
-            # 5. CREAR CANALES
-            # -----------------------------
-            for ch in backup["channels"]:
-                if ch["type"] == "category":
-                    continue
+    @app_commands.command(name="backup_crear", description="Crear un backup del servidor.")
+    async def backup_crear(self, interaction: discord.Interaction, nombre: str):
 
-                parent = categories.get(ch["category"])
+        print("[BACKUPS] Ejecutando /backup_crear...")
 
-                try:
-                    if ch["type"] == "text":
-                        await guild.create_text_channel(
-                            name=ch["name"],
-                            category=parent,
-                            position=ch["position"]
-                        )
+        if interaction.user.id != interaction.guild.owner_id:
+            return await interaction.response.send_message("❌ Solo el dueño puede crear backups.", ephemeral=True)
 
-                    elif ch["type"] == "voice":
-                        await guild.create_voice_channel(
-                            name=ch["name"],
-                            category=parent,
-                            position=ch["position"]
-                        )
+        if nombre in backups:
+            return await interaction.response.send_message("❌ Ya existe un backup con ese nombre.", ephemeral=True)
 
-                    elif ch["type"] == "stage":
-                        await guild.create_stage_channel(
-                            name=ch["name"],
-                            category=parent,
-                            position=ch["position"]
-                        )
+        puede, razon = can_create_backup(interaction.user.id)
+        if not puede:
+            return await interaction.response.send_message(razon, ephemeral=True)
 
-                    elif ch["type"] == "forum":
-                        await guild.create_forum_channel(
-                            name=ch["name"],
-                            category=parent,
-                            position=ch["position"]
-                        )
-
-                    await asyncio.sleep(1.5)
-
-                except Exception as e:
-                    print(f"Error creando canal {ch['name']}: {e}")
-                    await asyncio.sleep(5)
-
-            await interaction.followup.send(
-                "✅ **Backup restaurado correctamente.**",
-                ephemeral=True
-            )
-
-        except Exception as e:
-            print(f"Error en backup_restaurar: {e}")
-            await interaction.followup.send(
-                "❌ **Hubo un error al restaurar el backup.**\n"
-                "🔁 Inténtalo de nuevo.\n"
-                "🆘 Si el error persiste, únete al servidor de soporte:\n"
-                "https://discord.gg/qrMnzGztm3",
-                ephemeral=True
-            )
-
-
-
-# ============================
-    # BACKUP LISTAR
-    # ============================
-
-    @app_commands.command(
-        name="backup_listar",
-        description="Muestra todos los backups del usuario"
-    )
-    async def backup_listar(self, interaction: discord.Interaction):
-
-        user = interaction.user
-        user_id = user.id
-
-        if not (user.guild_permissions.administrator or user.guild_permissions.manage_guild):
-            return await interaction.response.send_message(
-                "❌ No tienes permiso para ver backups.",
-                ephemeral=True
-            )
-
-        data = load_backups(user_id)
-
-        if not data["backups"]:
-            return await interaction.response.send_message(
-                "📭 No tienes backups creados.",
-                ephemeral=True
-            )
-
-        mensaje = "📦 **Lista de backups disponibles:**\n\n"
-
-        for b in sorted(data["backups"], key=lambda x: x["id"], reverse=True):
-            mensaje += (
-                f"🆔 **{b['id']}**\n"
-                f"• Roles: **{len(b['roles'])}**\n"
-                f"• Canales: **{len(b['channels'])}**\n\n"
-            )
-
-        await interaction.response.send_message(mensaje, ephemeral=True)
-
-    # ============================
-    # BACKUP BORRAR
-    # ============================
-
-    @app_commands.command(
-        name="backup_borrar",
-        description="Borra un backup del usuario"
-    )
-    @app_commands.describe(
-        backup_id="ID del backup a borrar"
-    )
-    async def backup_borrar(self, interaction: discord.Interaction, backup_id: str):
-
-        user_id = interaction.user.id
-        data = load_backups(user_id)
-
-        backup = next((b for b in data["backups"] if b["id"] == backup_id), None)
-
-        if not backup:
-            return await interaction.response.send_message(
-                "❌ No existe un backup con ese ID.",
-                ephemeral=True
-            )
-
-        data["backups"].remove(backup)
-        save_backups(user_id, data)
-
-        await interaction.response.send_message(
-            f"🗑️ Backup `{backup_id}` borrado correctamente.",
-            ephemeral=True
+        embed = discord.Embed(
+            title="📦 Crear Backup",
+            description=f"Nombre: **{nombre}**\nSelecciona qué guardar.",
+            color=COLOR
         )
 
+        await interaction.response.send_message(embed=embed, view=BackupView(nombre), ephemeral=True)
 
-# ============================
-# SETUP DEL COG
-# ============================
+    # ============================================================
+    # /backup_restaurar
+    # ============================================================
+
+    @app_commands.command(name="backup_restaurar", description="Restaurar un backup.")
+    async def backup_restaurar(self, interaction: discord.Interaction, nombre: str):
+
+        if interaction.user.id != interaction.guild.owner_id:
+            return await interaction.response.send_message("❌ Solo el dueño puede restaurar.", ephemeral=True)
+
+        if nombre not in backups:
+            return await interaction.response.send_message("❌ Ese backup no existe.", ephemeral=True)
+
+        data = backups[nombre]
+
+        embed = discord.Embed(
+            title="⚠️ Advertencia",
+            description=(
+                "Restaurar este backup **borrará todo el servidor**.\n"
+                "El canal actual NO será borrado.\n\n"
+                "¿Deseas continuar?"
+            ),
+            color=COLOR
+        )
+
+        await interaction.response.send_message(embed=embed, view=ConfirmRestore(nombre, data), ephemeral=True)
+
+    # ============================================================
+    # /backup_borrar
+    # ============================================================
+
+    @app_commands.command(name="backup_borrar", description="Borrar un backup.")
+    async def backup_borrar(self, interaction: discord.Interaction, nombre: str):
+
+        if interaction.user.id != interaction.guild.owner_id:
+            return await interaction.response.send_message("❌ Solo el dueño puede borrar backups.", ephemeral=True)
+
+        if nombre not in backups:
+            return await interaction.response.send_message("❌ Ese backup no existe.", ephemeral=True)
+
+        del backups[nombre]
+        save_json(BACKUP_FILE, backups)
+
+        await interaction.response.send_message(f"🗑️ Backup **{nombre}** eliminado.", ephemeral=True)
+
+    # ============================================================
+    # /backup_listar
+    # ============================================================
+
+    @app_commands.command(name="backup_listar", description="Listar tus backups.")
+    async def backup_listar(self, interaction: discord.Interaction):
+
+        lista = [(name, data) for name, data in backups.items() if data["created_by"] == interaction.user.id]
+
+        if not lista:
+            return await interaction.response.send_message("📭 No tienes backups.", ephemeral=True)
+
+        embed = discord.Embed(title="📚 Tus Backups", color=COLOR)
+
+        for name, data in lista:
+            embed.add_field(
+                name=f"📦 {name}",
+                value=f"Servidor: **{data['guild_name']}**\nFecha: <t:{data['created_at']}:F>",
+                inline=False
+            )
+
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    # ============================================================
+    # /backup_info
+    # ============================================================
+
+    @app_commands.command(name="backup_info", description="Información de un backup.")
+    async def backup_info(self, interaction: discord.Interaction, nombre: str):
+
+        print("[BACKUPS] Ejecutando /backup_info...")
+
+        if nombre not in backups:
+            return await interaction.response.send_message("❌ Ese backup no existe.", ephemeral=True)
+
+        data = backups[nombre]
+
+        embed = discord.Embed(
+            title=f"ℹ️ Información del Backup: {nombre}",
+            color=COLOR
+        )
+
+        embed.add_field(name="Servidor", value=data["guild_name"], inline=False)
+        embed.add_field(name="Creador", value=f"<@{data['created_by']}>", inline=False)
+        embed.add_field(name="Fecha", value=f"<t:{data['created_at']}:F>", inline=False)
+
+        componentes = "\n".join([f"• {c}" for c in data["components"]])
+        embed.add_field(name="Componentes guardados", value=componentes, inline=False)
+
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+# ============================================================
+# SETUP
+# ============================================================
 
 async def setup(bot):
-    await bot.add_cog(BackupsCog(bot))
+    print("[BACKUPS] Cargando COG Backups...")
+    await bot.add_cog(Backups(bot))
+    print("[BACKUPS] COG Backups cargado correctamente.")
