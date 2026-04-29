@@ -117,7 +117,7 @@ class Giveaways(commands.Cog):
         guardar_giveaways(giveaways)
 
         embed = discord.Embed(
-            title="<:giveaway:1494074344341639188> **SORTEO ACTIVO**",
+            title="<:giveaway:1494074344341639188> **SORTEO ACTIVO** <:giveaway:1494074344341639188>",
             description=(
                 "<:regalo:1483506548495093957> ¡Un nuevo sorteo ha comenzado en el servidor!\n\n"
                 "**<a:fuegoazul:1483506592325439540> Cómo participar:**\n"
@@ -187,6 +187,63 @@ class Giveaways(commands.Cog):
         )
 
     # ============================
+    # /giveaway_info
+    # ============================
+
+    @discord.app_commands.command(
+        name="giveaway_info",
+        description="Muestra información detallada de un sorteo."
+    )
+    @discord.app_commands.describe(
+        giveaway_id="ID del sorteo (lo ves en el embed)"
+    )
+    async def giveaway_info(self, interaction: discord.Interaction, giveaway_id: int):
+
+        data = giveaways.get(str(giveaway_id))
+        if not data:
+            return await interaction.response.send_message("❌ Ese ID de sorteo no existe.", ephemeral=True)
+
+        guild = interaction.guild
+
+        # Participantes válidos
+        participantes_validos = [uid for uid in data["participantes"] if guild.get_member(int(uid))]
+
+        # Tiempo restante
+        ahora = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
+        fin = data["fin"]
+        restante = fin - ahora
+
+        estado = "🟢 Activo" if restante > 0 else "🔴 Finalizado"
+
+        embed = discord.Embed(
+            title="<a:alarmazul:1491858094043693177> Información del sorteo",
+            color=discord.Color(0x0A3D62)
+        )
+
+        embed.add_field(name="🎁 Premio", value=data["premio"], inline=False)
+        embed.add_field(name="👤 Host", value=f"<@{data['host']}>", inline=True)
+        embed.add_field(name="🏆 Ganadores configurados", value=str(data["ganadores"]), inline=True)
+        embed.add_field(name="📌 Estado", value=estado, inline=False)
+        embed.add_field(name="📅 Finaliza", value=f"<t:{data['fin']}:F>", inline=False)
+
+        if restante > 0:
+            embed.add_field(name="⏳ Tiempo restante", value=f"<t:{data['fin']}:R>", inline=False)
+
+        embed.add_field(name="📨 Canal", value=f"<#{data['canal']}>", inline=False)
+        embed.add_field(name="🆔 ID del sorteo", value=str(giveaway_id), inline=False)
+
+        if participantes_validos:
+            lista = "\n".join([f"• <@{uid}>" for uid in participantes_validos])
+        else:
+            lista = "Nadie ha participado aún."
+
+        embed.add_field(name="👥 Participantes", value=lista, inline=False)
+
+        embed.set_thumbnail(url="https://raw.githubusercontent.com/lildrakk/ModdyBot-web/eb6b1cb04336b0929a83cacad3b6834d11cedf8c/standard-3.gif")
+
+        await interaction.response.send_message(embed=embed, ephemeral=False)
+
+    # ============================
     # /reroll
     # ============================
 
@@ -248,4 +305,4 @@ class Giveaways(commands.Cog):
 # ============================
 
 async def setup(bot):
-    await bot.add_cog(Giveaways(bot)) 
+    await bot.add_cog(Giveaways(bot))
