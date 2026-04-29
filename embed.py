@@ -58,7 +58,14 @@ class EmbedCreator(discord.ui.Modal, title="Crear un embed personalizado"):
         if self.footer.value:
             embed.set_footer(text=self.footer.value)
 
-        await interaction.response.send_message(embed=embed)
+        # 1️⃣ Enviar mensaje ephemeral de confirmación
+        await interaction.response.send_message(
+            "✅ Embed enviado correctamente.",
+            ephemeral=True
+        )
+
+        # 2️⃣ Enviar el embed real al canal SIN mostrar el comando
+        await interaction.channel.send(embed=embed)
 
 # ============================
 # COG PRINCIPAL
