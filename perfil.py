@@ -90,35 +90,52 @@ class Perfil(commands.Cog):
             miembro = guild.get_member(usuario.id)
 
         # ============================
-        # RANGO (PRIORIDAD CORRECTA)
+        # RANGO + INSIGNIAS AUTOMÁTICAS (PRIORIDAD)
         # ============================
 
         insignias_auto = []
         rango = "Usuario normal"
+        rango_prioridad = 0  # 0 = usuario, 1 = staff, 2 = mod, 3 = cofundador, 4 = fundador
 
         if miembro:
             roles = [r.id for r in miembro.roles]
 
+            # Orden de prioridad: Fundador > Cofundador > Moderador > Staff > Usuario
+            # 1) Fundador
             if ROL_FUNDADOR in roles:
-                rango = "<:corona:1494336904769044620> Fundador oficial de ModdyBot"
                 insignias_auto.append(EMOJI_FUNDADOR)
+                if rango_prioridad < 4:
+                    rango_prioridad = 4
+                    rango = "<:corona:1494336904769044620> Fundador oficial de ModdyBot"
 
-            elif ROL_COFUNDADOR in roles:
-                rango = "<:corona:1494336904769044620> Co fundador oficial de ModdyBot"
+            # 2) Cofundador
+            if ROL_COFUNDADOR in roles:
                 insignias_auto.append(EMOJI_COFUNDADOR)
+                if rango_prioridad < 3:
+                    rango_prioridad = 3
+                    rango = "<:corona:1494336904769044620> Co fundador oficial de ModdyBot"
 
-            elif ROL_MOD in roles:
-                rango = "<:moderador:1500474305837011095> Moderador oficial de ModdyBot"
+            # 3) Moderador
+            if ROL_MOD in roles:
                 insignias_auto.append(EMOJI_MOD)
+                if rango_prioridad < 2:
+                    rango_prioridad = 2
+                    rango = "<:moderador:1500474305837011095> Moderador oficial de ModdyBot"
 
-            elif ROL_STAFF in roles:
-                rango = "<:moderacion:1483506627649994812> Staff oficial de ModdyBot"
+            # 4) Staff
+            if ROL_STAFF in roles:
                 insignias_auto.append(EMOJI_STAFF)
+                if rango_prioridad < 1:
+                    rango_prioridad = 1
+                    rango = "<:moderacion:1483506627649994812> Staff oficial de ModdyBot"
 
-            else:
+            # Si no tiene ninguno de los rangos anteriores
+            if not insignias_auto:
                 insignias_auto.append(EMOJI_USUARIO)
+                rango = "Usuario normal"
         else:
             insignias_auto.append(EMOJI_USUARIO)
+            rango = "Usuario normal"
 
         # ============================
         # INSIGNIAS MANUALES
@@ -173,9 +190,10 @@ class Perfil(commands.Cog):
 
         embed.add_field(name="<:nose:1491491155198607440> Servidores en común", value=str(servidores_comunes), inline=False)
 
-        # Insignias finales
+        # Insignias finales: automáticas (ya en orden) + manuales
         insignias_finales = insignias_auto + insignias_manual
 
+        # Blacklist badge al final si está en blacklist
         if esta_en_blacklist:
             insignias_finales.append(EMOJI_BLACKLIST_BADGE)
 
