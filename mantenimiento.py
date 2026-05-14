@@ -62,28 +62,13 @@ class Mantenimiento(commands.Cog):
                 print("🟢 Mantenimiento desactivado automáticamente por tiempo.")
 
     # ============================
-    # BLOQUEO GLOBAL
+    # 🔥 BLOQUEO GLOBAL 100% REAL (AQUÍ ESTÁ LA CLAVE)
     # ============================
 
-    @commands.Cog.listener()
-    async def on_interaction(self, interaction: discord.Interaction):
-
-        if not interaction.type == discord.InteractionType.application_command:
-            return
-
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if self.data["active"]:
-
-            if interaction.user.id in USER_WHITELIST:
-                return
-
-            embed = self.build_default_embed()
-
-            try:
-                await interaction.response.send_message(embed=embed, ephemeral=True)
-            except:
-                pass
-
-            return
+            return interaction.user.id in USER_WHITELIST
+        return True
 
     # ============================
     # EMBED POR DEFECTO
@@ -100,7 +85,6 @@ class Mantenimiento(commands.Cog):
             color=COLOR_OFICIAL
         )
 
-        # Razón opcional
         if self.data.get("reason"):
             embed.add_field(
                 name="📌 Razón del mantenimiento",
@@ -108,7 +92,6 @@ class Mantenimiento(commands.Cog):
                 inline=False
             )
 
-        # Tiempo restante
         if self.data.get("expires_at"):
             expires = datetime.fromisoformat(self.data["expires_at"])
             restante = expires - datetime.now()
@@ -121,7 +104,6 @@ class Mantenimiento(commands.Cog):
                 inline=False
             )
 
-        # Soporte
         embed.add_field(
             name="🔗 Soporte",
             value=f"[Haz clic aquí para entrar al servidor de soporte]({SOPORTE})",
@@ -145,17 +127,19 @@ class Mantenimiento(commands.Cog):
         app_commands.Choice(name="Desactivar", value="desactivar"),
         app_commands.Choice(name="Estado", value="estado")
     ])
-    async def mantenimiento(self, interaction: discord.Interaction, accion: app_commands.Choice[str], tiempo: int = None, razon: str = None):
+    async def mantenimiento(
+        self,
+        interaction: discord.Interaction,
+        accion: app_commands.Choice[str],
+        tiempo: int = None,
+        razon: str = None
+    ):
 
         if interaction.user.id not in ADMIN_WHITELIST:
             return await interaction.response.send_message(
                 "❌ No tienes permisos para usar este comando.",
                 ephemeral=True
             )
-
-        # ============================
-        # ESTADO
-        # ============================
 
         if accion.value == "estado":
             estado = "🟢 Desactivado" if not self.data["active"] else "🔴 Activado"
@@ -176,10 +160,6 @@ class Mantenimiento(commands.Cog):
                 )
 
             return await interaction.response.send_message(embed=embed, ephemeral=True)
-
-        # ============================
-        # ACTIVAR
-        # ============================
 
         if accion.value == "activar":
 
@@ -207,10 +187,6 @@ class Mantenimiento(commands.Cog):
 
             return await interaction.response.send_message(embed=embed, ephemeral=True)
 
-        # ============================
-        # DESACTIVAR
-        # ============================
-
         if accion.value == "desactivar":
 
             self.data["active"] = False
@@ -227,4 +203,4 @@ class Mantenimiento(commands.Cog):
 
 
 async def setup(bot):
-    await bot.add_cog(Mantenimiento(bot))
+    await bot.add_cog(Mantenimiento(bot)) 
