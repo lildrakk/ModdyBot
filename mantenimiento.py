@@ -6,16 +6,8 @@ from datetime import datetime, timedelta
 
 MAINTENANCE_FILE = "maintenance.json"
 
-# IDs que pueden usar /mantenimiento
-ADMIN_WHITELIST = [
-    1330486565528670284,
-    1394342273919225959
-]
-
-# IDs que pueden usar comandos durante mantenimiento
-USER_WHITELIST = [
-    1330486565528670284
-]
+ADMIN_WHITELIST = [1330486565528670284, 1394342273919225959]
+USER_WHITELIST = [1330486565528670284]
 
 COLOR_OFICIAL = discord.Color(0x0A3D62)
 SOPORTE = "https://discord.gg/Q7XPqHSnCk"
@@ -62,13 +54,21 @@ class Mantenimiento(commands.Cog):
                 print("🟢 Mantenimiento desactivado automáticamente por tiempo.")
 
     # ============================
-    # 🔥 BLOQUEO GLOBAL 100% REAL (AQUÍ ESTÁ LA CLAVE)
+    # BLOQUEO GLOBAL REAL
     # ============================
 
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if self.data["active"]:
-            return interaction.user.id in USER_WHITELIST
-        return True
+    @commands.Cog.listener()
+    async def on_interaction(self, interaction: discord.Interaction):
+        if not interaction.type == discord.InteractionType.application_command:
+            return
+
+        if self.data["active"] and interaction.user.id not in USER_WHITELIST:
+            embed = self.build_default_embed()
+            try:
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+            except:
+                pass
+            return
 
     # ============================
     # EMBED POR DEFECTO
@@ -97,7 +97,6 @@ class Mantenimiento(commands.Cog):
             restante = expires - datetime.now()
             minutos = int(restante.total_seconds() // 60)
             segundos = int(restante.total_seconds() % 60)
-
             embed.add_field(
                 name="⏳ Tiempo restante",
                 value=f"{minutos} minutos y {segundos} segundos",
@@ -127,13 +126,7 @@ class Mantenimiento(commands.Cog):
         app_commands.Choice(name="Desactivar", value="desactivar"),
         app_commands.Choice(name="Estado", value="estado")
     ])
-    async def mantenimiento(
-        self,
-        interaction: discord.Interaction,
-        accion: app_commands.Choice[str],
-        tiempo: int = None,
-        razon: str = None
-    ):
+    async def mantenimiento(self, interaction: discord.Interaction, accion: app_commands.Choice[str], tiempo: int = None, razon: str = None):
 
         if interaction.user.id not in ADMIN_WHITELIST:
             return await interaction.response.send_message(
@@ -162,7 +155,6 @@ class Mantenimiento(commands.Cog):
             return await interaction.response.send_message(embed=embed, ephemeral=True)
 
         if accion.value == "activar":
-
             self.data["active"] = True
             self.data["activated_by"] = str(interaction.user)
             self.data["reason"] = razon
@@ -188,7 +180,6 @@ class Mantenimiento(commands.Cog):
             return await interaction.response.send_message(embed=embed, ephemeral=True)
 
         if accion.value == "desactivar":
-
             self.data["active"] = False
             self.data["expires_at"] = None
             self.data["reason"] = None
