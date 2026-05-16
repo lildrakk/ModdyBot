@@ -2,14 +2,24 @@ import discord
 from discord.ext import commands
 import json
 from datetime import datetime, timedelta
+import os
 
 MAINTENANCE_FILE = "maintenance.json"
 
-ADMIN_WHITELIST = [1330486565528670284, 1394342273919225959]
-USER_WHITELIST = [1330486565528670284]
+# ✅ Whitelist de administradores que pueden usar /mantenimiento
+ADMIN_WHITELIST = [1394342273919225959]
+# ✅ Whitelist de usuarios que pueden usar comandos durante mantenimiento (vacío)
+USER_WHITELIST = []
 
 
 def load_maintenance():
+    # Si no existe el JSON, se crea automáticamente
+    if not os.path.exists(MAINTENANCE_FILE):
+        data = {"active": False, "reason": None, "expires_at": None}
+        with open(MAINTENANCE_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4, ensure_ascii=False)
+        return data
+
     try:
         with open(MAINTENANCE_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -55,11 +65,9 @@ class Mantenimiento(commands.Cog):
             color=discord.Color.orange()
         )
 
-        # Si el comando ya respondió, usar followup
+        # Si el comando ya respondió, no enviar nada más
         try:
-            if interaction.response.is_done():
-                await interaction.followup.send(embed=embed, ephemeral=True)
-            else:
+            if not interaction.response.is_done():
                 await interaction.response.send_message(embed=embed, ephemeral=True)
         except Exception:
             pass
