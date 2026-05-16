@@ -5,8 +5,8 @@ from datetime import datetime, timedelta
 
 MAINTENANCE_FILE = "maintenance.json"
 
-ADMIN_WHITELIST = [1394342273919225959]
-USER_WHITELIST = []
+ADMIN_WHITELIST = [1330486565528670284, 1394342273919225959]
+USER_WHITELIST = [1330486565528670284]
 
 
 def load_maintenance():
@@ -32,7 +32,6 @@ class Mantenimiento(commands.Cog):
 
     @commands.Cog.listener("on_interaction")
     async def mantenimiento_block(self, interaction: discord.Interaction):
-
         data = load_maintenance()
 
         # Si no hay mantenimiento → permitir
@@ -49,18 +48,21 @@ class Mantenimiento(commands.Cog):
                 if interaction.user.id in ADMIN_WHITELIST:
                     return
 
-        # Si el comando ya respondió → no bloquear
-        if interaction.response.is_done():
-            return
-
-        # Bloquear el resto
+        # Preparar embed de aviso
         embed = discord.Embed(
             title="🛠️ Mantenimiento activo",
             description="ModdyBot está realizando tareas internas.",
             color=discord.Color.orange()
         )
 
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        # Si el comando ya respondió, usar followup
+        try:
+            if interaction.response.is_done():
+                await interaction.followup.send(embed=embed, ephemeral=True)
+            else:
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+        except Exception:
+            pass
 
         # Detener ejecución del comando
         raise Exception("Bloqueado por mantenimiento")
@@ -71,7 +73,6 @@ class Mantenimiento(commands.Cog):
 
     @discord.app_commands.command(name="mantenimiento")
     async def mantenimiento(self, interaction: discord.Interaction, accion: str, tiempo: int = None, razon: str = None):
-
         if interaction.user.id not in ADMIN_WHITELIST:
             return await interaction.response.send_message("❌ No tienes permisos.", ephemeral=True)
 
