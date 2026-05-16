@@ -54,7 +54,7 @@ VERSION_NEW = {
              "embed",
              "perfil",
              "lock",
-             "mantenimiento"
+
     ]
 }
 
@@ -142,6 +142,7 @@ bot = Bot()
 # CHECK GLOBAL DE MANTENIMIENTO
 # ============================
 
+@bot.tree.check
 async def global_maintenance_check(interaction: discord.Interaction):
     import json
     from datetime import datetime
@@ -152,26 +153,54 @@ async def global_maintenance_check(interaction: discord.Interaction):
     except:
         return True  # si no existe, no bloquear
 
-    # Si no está activo → permitir
     if not data.get("active"):
         return True
 
-    # Whitelist de usuarios permitidos
-    USER_WHITELIST = [1330486565528670284]
-    ADMIN_WHITELIST = [1330486565528670284, 1394342273919225959]
+    USER_WHITELIST = []
+    ADMIN_WHITELIST = [1394342273919225959]
 
-    # Permitir a usuarios whitelisted
     if interaction.user.id in USER_WHITELIST:
         return True
 
-    # Permitir a admins usar /mantenimiento
     if interaction.command and interaction.command.name == "mantenimiento":
         if interaction.user.id in ADMIN_WHITELIST:
             return True
 
     # Bloquear el resto
-    from cogs.mantenimiento import Mantenimiento
-    embed = Mantenimiento.build_default_embed(Mantenimiento)
+    embed = discord.Embed(
+        title="🛠️ Mantenimiento 🛠️",
+        description=(
+            "ModdyBot está realizando tareas internas para mejorar su rendimiento, estabilidad y seguridad.\n"
+            "Durante este proceso, algunas funciones permanecerán temporalmente deshabilitadas.\n\n"
+            "Agradecemos tu paciencia mientras trabajamos para ofrecerte la mejor experiencia posible."
+        ),
+        color=discord.Color(0x0A3D62)
+    )
+
+    if data.get("reason"):
+        embed.add_field(
+            name="📌 Razón del mantenimiento",
+            value=f"```\n{data['reason']}\n```",
+            inline=False
+        )
+
+    if data.get("expires_at"):
+        expires = datetime.fromisoformat(data["expires_at"])
+        restante = expires - datetime.now()
+        if restante.total_seconds() > 0:
+            minutos = int(restante.total_seconds() // 60)
+            segundos = int(restante.total_seconds() % 60)
+            embed.add_field(
+                name="⏳ Tiempo restante",
+                value=f"{minutos} minutos y {segundos} segundos",
+                inline=False
+            )
+
+    embed.add_field(
+        name="🔗 Soporte",
+        value="[Haz clic aquí para entrar al servidor de soporte](https://discord.gg/Q7XPqHSnCk)",
+        inline=False
+    )
 
     try:
         await interaction.response.send_message(embed=embed, ephemeral=True)
@@ -179,9 +208,6 @@ async def global_maintenance_check(interaction: discord.Interaction):
         await interaction.followup.send(embed=embed, ephemeral=True)
 
     return False
-
-
-bot.tree.add_check(global_maintenance_check)
 
 
 # ============================
@@ -236,4 +262,4 @@ if not TOKEN:
 else:
     print("✔ TOKEN encontrado, iniciando bot...")
 
-bot.run(TOKEN) 
+bot.run(TOKEN)
