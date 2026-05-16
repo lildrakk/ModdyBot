@@ -94,7 +94,7 @@ class Bot(commands.Bot):
 bot = Bot()
 
 # ============================================================
-# 🔥 SISTEMA DE MANTENIMIENTO (SIN COG)
+# 🔥 SISTEMA DE MANTENIMIENTO
 # ============================================================
 
 MAINTENANCE_FILE = "maintenance.json"
@@ -122,10 +122,9 @@ def save_maintenance(data):
 
 
 # ============================================================
-# 🔥 CHECK GLOBAL (bloquea todos los comandos)
+# 🔥 CHECK GLOBAL (FUNCIONA EN 2.3.2)
 # ============================================================
 
-@bot.tree.interaction_check
 async def maintenance_check(interaction: discord.Interaction):
 
     data = load_maintenance()
@@ -138,7 +137,7 @@ async def maintenance_check(interaction: discord.Interaction):
     if interaction.user.id in USER_WHITELIST:
         return True
 
-    # Permitir a admins usar /mantenimiento
+    # Permitir admins usar /mantenimiento
     if interaction.command and interaction.command.name == "mantenimiento":
         if interaction.user.id in ADMIN_WHITELIST:
             return True
@@ -173,8 +172,12 @@ async def maintenance_check(interaction: discord.Interaction):
     return False
 
 
+# AÑADIR CHECK GLOBAL AL ÁRBOL (ESTO ES LO QUE 2.3.2 SÍ SOPORTA)
+bot.tree.add_check(maintenance_check)
+
+
 # ============================================================
-# 🔥 COMANDO /mantenimiento (DENTRO DEL MAIN.PY)
+# 🔥 COMANDO /mantenimiento
 # ============================================================
 
 @bot.tree.command(name="mantenimiento", description="Control del modo mantenimiento del bot.")
