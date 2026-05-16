@@ -114,39 +114,42 @@ def save_maintenance(data):
 
 
 # ============================================================
-# 🔥 CHECK GLOBAL (FUNCIONA EN DISCORD.PY 2.3.2)
+# 🔥 BLOQUEO GLOBAL UNIVERSAL (FUNCIONA EN TODAS LAS VERSIONES)
 # ============================================================
 
-async def maintenance_check(interaction: discord.Interaction):
+@bot.listen("on_interaction")
+async def maintenance_block(interaction: discord.Interaction):
 
     data = load_maintenance()
 
     # Si no hay mantenimiento → permitir
     if not data["active"]:
-        return True
+        return
 
     # Whitelist total
     if interaction.user.id in USER_WHITELIST:
-        return True
+        return
 
     # Permitir admins usar /mantenimiento
-    if interaction.command and interaction.command.name == "mantenimiento":
-        if interaction.user.id in ADMIN_WHITELIST:
-            return True
+    if interaction.type == discord.InteractionType.application_command:
+        if interaction.command.name == "mantenimiento":
+            if interaction.user.id in ADMIN_WHITELIST:
+                return
 
-    # Bloquear el resto
+    # Bloquear todo lo demás
     embed = discord.Embed(
         title="🛠️ Mantenimiento activo",
         description="ModdyBot está realizando tareas internas.",
         color=discord.Color.orange()
     )
 
-    await interaction.response.send_message(embed=embed, ephemeral=True)
-    return False
+    try:
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+    except discord.InteractionResponded:
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
-
-# ESTA ES LA POSICIÓN CORRECTA
-bot.tree.add_check(maintenance_check)
+    # Detener ejecución del comando
+    raise Exception("Bloqueado por mantenimiento")
 
 
 # ============================================================
