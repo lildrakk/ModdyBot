@@ -2,17 +2,19 @@ import discord
 from discord.ext import commands
 import os
 from dotenv import load_dotenv
+import json
+from datetime import datetime, timedelta
 
-# IMPORTANTE: importar la View persistente
 from cogs.giveaways import GiveawayView
-
-# -----------------------------
-# SISTEMA DE VERSIONES
-# -----------------------------
 from cogs.version import load_versions, OWNER_ID
 
-BOT_VERSION = "v1.2"  # Versión real del código
+BOT_VERSION = "v1.2"
 
+load_dotenv()
+
+# ============================================================
+# SISTEMA DE VERSIONES
+# ============================================================
 
 def version_permitida(user_id: int):
     versions = load_versions()
@@ -21,40 +23,21 @@ def version_permitida(user_id: int):
     return versions["public"]
 
 
-# -----------------------------
-# SISTEMA DE MÓDULOS POR VERSIÓN
-# -----------------------------
 VERSION_NEW = {
     "v1.0": [
-        "antibots",
-        "antiflood",
-        "antilinks",
-        "antiraid",
-        "info",
-        "logs",
-        "moderacion",
-        "securityscan",
-        "utilidad",
-        "verification",
-        "version",
-        "welcome_dm",
-        "help"
+        "antibots", "antiflood", "antilinks", "antiraid", "info",
+        "logs", "moderacion", "securityscan", "utilidad",
+        "verification", "version", "welcome_dm", "help"
     ],
 
-    "v1.1": ["antialts",
-             "blacklistglobal",
-             "blacklistserver"
+    "v1.1": [
+        "antialts", "blacklistglobal", "blacklistserver"
     ],
-    "v1.2": ["antiping",
-             "statuspanel",
-             "giveaways",
-             "premium",
-             "backups",
-             "premiumcdms",
-             "embed",
-             "perfil",
-             "lock",
 
+    "v1.2": [
+        "antiping", "statuspanel", "giveaways", "premium",
+        "backups", "premiumcdms", "embed", "perfil",
+        "lock"
     ]
 }
 
@@ -74,18 +57,9 @@ def get_modules_for_version(version):
     return modules
 
 
-# -----------------------------
-# Cargar variables del .env
-# -----------------------------
-load_dotenv()
-
-
-# =============================================
-# DASHBOARD — ARRANCAR EN HILO SEPARADO
-# =============================================
-from dashboard import start_dashboard
-start_dashboard()
-
+# ============================================================
+# BOT
+# ============================================================
 
 class Bot(commands.Bot):
     def __init__(self):
@@ -109,82 +83,81 @@ class Bot(commands.Bot):
             except Exception as e:
                 print(f"❌ Error cargando {module}: {e}")
 
-        print("\n✅ Módulos cargados correctamente.\n")
-
-        print("==============================")
-        print(f"📦 Versión del código: {BOT_VERSION}")
-        print(f"🌍 Versión pública: {versions['public']}")
-        print(f"🛠️ Versión dev: {versions['dev']}")
-        print("==============================\n")
-
-        print("\n🔍 Verificando comandos slash...\n")
-
+        print("\n🌐 Sincronizando comandos...")
         try:
             synced = await self.tree.sync()
-            print(f"🌐 Comandos sincronizados: {len(synced)}")
+            print(f"✔ Comandos sincronizados: {len(synced)}")
         except Exception as e:
-            print("❌ ERROR SINCRONIZANDO COMANDOS:")
-            print(e)
-
-        print("\n🔍 Revisando errores internos de comandos...\n")
-
-        for cmd in self.tree.walk_commands():
-            try:
-                _ = cmd.name
-            except Exception as e:
-                print(f"❌ ERROR en el comando {cmd.name}: {e}")
+            print(f"❌ Error sincronizando: {e}")
 
 
 bot = Bot()
 
+# ============================================================
+# 🔥 SISTEMA DE MANTENIMIENTO (SIN COG)
+# ============================================================
 
-# ============================
-# CHECK GLOBAL DE MANTENIMIENTO
-# ============================
+MAINTENANCE_FILE = "maintenance.json"
 
-@bot.tree.check
-async def global_maintenance_check(interaction: discord.Interaction):
-    import json
-    from datetime import datetime
+ADMIN_WHITELIST = [1330486565528670284, 1394342273919225959]
+USER_WHITELIST = [1330486565528670284]
 
+
+def load_maintenance():
     try:
-        with open("maintenance.json", "r", encoding="utf-8") as f:
-            data = json.load(f)
+        with open(MAINTENANCE_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
     except:
-        return True  # si no existe, no bloquear
+        return {
+            "active": False,
+            "reason": None,
+            "activated_by": None,
+            "expires_at": None
+        }
 
-    if not data.get("active"):
+
+def save_maintenance(data):
+    with open(MAINTENANCE_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4, ensure_ascii=False)
+
+
+# ============================================================
+# 🔥 CHECK GLOBAL (bloquea todos los comandos)
+# ============================================================
+
+@bot.tree.interaction_check
+async def maintenance_check(interaction: discord.Interaction):
+
+    data = load_maintenance()
+
+    # Si no hay mantenimiento → permitir
+    if not data["active"]:
         return True
 
-    USER_WHITELIST = []
-    ADMIN_WHITELIST = [1394342273919225959]
-
+    # Whitelist total
     if interaction.user.id in USER_WHITELIST:
         return True
 
+    # Permitir a admins usar /mantenimiento
     if interaction.command and interaction.command.name == "mantenimiento":
         if interaction.user.id in ADMIN_WHITELIST:
             return True
 
     # Bloquear el resto
     embed = discord.Embed(
-        title="🛠️ Mantenimiento 🛠️",
-        description=(
-            "ModdyBot está realizando tareas internas para mejorar su rendimiento, estabilidad y seguridad.\n"
-            "Durante este proceso, algunas funciones permanecerán temporalmente deshabilitadas.\n\n"
-            "Agradecemos tu paciencia mientras trabajamos para ofrecerte la mejor experiencia posible."
-        ),
+        title="🛠️ Mantenimiento activo",
+        description="ModdyBot está realizando tareas internas. Inténtalo más tarde.",
         color=discord.Color(0x0A3D62)
     )
 
-    if data.get("reason"):
+    if data["reason"]:
         embed.add_field(
-            name="📌 Razón del mantenimiento",
+            name="📌 Razón",
             value=f"```\n{data['reason']}\n```",
             inline=False
         )
 
-    if data.get("expires_at"):
+    if data["expires_at"]:
         expires = datetime.fromisoformat(data["expires_at"])
         restante = expires - datetime.now()
         if restante.total_seconds() > 0:
@@ -196,70 +169,94 @@ async def global_maintenance_check(interaction: discord.Interaction):
                 inline=False
             )
 
-    embed.add_field(
-        name="🔗 Soporte",
-        value="[Haz clic aquí para entrar al servidor de soporte](https://discord.gg/Q7XPqHSnCk)",
-        inline=False
-    )
-
-    try:
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-    except discord.InteractionResponded:
-        await interaction.followup.send(embed=embed, ephemeral=True)
-
+    await interaction.response.send_message(embed=embed, ephemeral=True)
     return False
 
 
-# ============================
-# ESTADO DINÁMICO
-# ============================
-async def actualizar_estado():
-    servidores = len(bot.guilds)
-    await bot.change_presence(
-        activity=discord.Activity(
-            type=discord.ActivityType.playing,
-            name=f"¡/help para comenzar! — protegiendo a {servidores} servidores"
+# ============================================================
+# 🔥 COMANDO /mantenimiento (DENTRO DEL MAIN.PY)
+# ============================================================
+
+@bot.tree.command(name="mantenimiento", description="Control del modo mantenimiento del bot.")
+async def mantenimiento(
+    interaction: discord.Interaction,
+    accion: str,
+    tiempo: int = None,
+    razon: str = None
+):
+
+    if interaction.user.id not in ADMIN_WHITELIST:
+        return await interaction.response.send_message(
+            "❌ No tienes permisos para usar este comando.",
+            ephemeral=True
         )
-    )
-    print(f"✔ Estado actualizado: protegiendo a {servidores} servidores")
+
+    data = load_maintenance()
+
+    if accion.lower() == "estado":
+        estado = "🟢 Desactivado" if not data["active"] else "🔴 Activado"
+
+        embed = discord.Embed(
+            title="📊 Estado del mantenimiento",
+            color=discord.Color(0x0A3D62)
+        )
+        embed.add_field(name="Estado", value=estado, inline=False)
+        embed.add_field(name="Activado por", value=data["activated_by"] or "Nadie", inline=False)
+        embed.add_field(name="Expira", value=data["expires_at"] or "Sin tiempo", inline=False)
+
+        if data["reason"]:
+            embed.add_field(name="Razón", value=f"```\n{data['reason']}\n```", inline=False)
+
+        return await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    if accion.lower() == "activar":
+        data["active"] = True
+        data["activated_by"] = str(interaction.user)
+        data["reason"] = razon
+
+        if tiempo:
+            expires_at = datetime.now() + timedelta(minutes=tiempo)
+            data["expires_at"] = expires_at.isoformat()
+        else:
+            data["expires_at"] = None
+
+        save_maintenance(data)
+
+        return await interaction.response.send_message(
+            f"🔴 Mantenimiento activado.\nTiempo: {tiempo or 'Indefinido'} minutos.",
+            ephemeral=True
+        )
+
+    if accion.lower() == "desactivar":
+        data["active"] = False
+        data["expires_at"] = None
+        data["reason"] = None
+        save_maintenance(data)
+
+        return await interaction.response.send_message(
+            "🟢 Mantenimiento desactivado.",
+            ephemeral=True
+        )
 
 
-# ============================
+# ============================================================
 # EVENTOS
-# ============================
+# ============================================================
+
 @bot.event
 async def on_ready():
     print(f"🤖 Bot conectado como {bot.user}")
-
     bot.add_view(GiveawayView(giveaway_id=None))
 
     try:
-        synced = await bot.tree.sync()
-        print(f"📘 Slash commands sincronizados: {len(synced)}")
-    except Exception as e:
-        print(f"❌ Error al sincronizar comandos: {e}")
-
-    await actualizar_estado()
+        await bot.tree.sync()
+    except:
+        pass
 
 
-@bot.event
-async def on_guild_join(guild):
-    await actualizar_estado()
-
-
-@bot.event
-async def on_guild_remove(guild):
-    await actualizar_estado()
-
-
-# ============================
+# ============================================================
 # INICIAR BOT
-# ============================
+# ============================================================
+
 TOKEN = os.getenv("TOKEN")
-
-if not TOKEN:
-    print("❌ ERROR: No se encontró la variable TOKEN en el .env")
-else:
-    print("✔ TOKEN encontrado, iniciando bot...")
-
-bot.run(TOKEN)
+bot.run(TOKEN) 
