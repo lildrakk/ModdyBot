@@ -87,7 +87,7 @@ class StatusPanel(commands.Cog):
         razon = data.get("reason")
         expires_at = data.get("expires_at")
 
-        # Detectar cambios de estado → enviar @everyone
+        # Detectar cambios → enviar @everyone
         estado_actual = en_mantenimiento
         estado_anterior = self.estado_anterior
 
@@ -96,9 +96,9 @@ class StatusPanel(commands.Cog):
         else:
             if estado_actual != estado_anterior:
                 if estado_actual:
-                    await channel.send("@everyone 🔧 El bot ha entrado en mantenimiento.")
+                    await channel.send("@everyone")
                 else:
-                    await channel.send("@everyone 🟢 El bot ha salido del mantenimiento.")
+                    await channel.send("@everyone")
                 self.estado_anterior = estado_actual
 
         # ============================
@@ -110,10 +110,6 @@ class StatusPanel(commands.Cog):
 
         uptime_seconds = int(time.time() - self.start_time)
         uptime = str(datetime.timedelta(seconds=uptime_seconds))
-
-        # ============================
-        # USO REAL DEL BOT
-        # ============================
 
         process = psutil.Process()
 
@@ -140,7 +136,7 @@ class StatusPanel(commands.Cog):
 
         # Estado principal
         if en_mantenimiento:
-            estado_texto = "🛠️ En mantenimiento"
+            estado_texto = "En mantenimiento"
         else:
             estado_texto = "Online"
 
@@ -150,47 +146,39 @@ class StatusPanel(commands.Cog):
             inline=False
         )
 
-        # Mostrar razón si existe
+        # Razón
         if en_mantenimiento and razon:
-            embed.add_field(
-                name="Razón",
-                value=razon,
-                inline=False
-            )
+            embed.add_field(name="Razón", value=razon, inline=False)
 
-        # Mostrar tiempo restante si existe
+        # Tiempo restante
         if en_mantenimiento and expires_at:
             try:
                 exp = datetime.datetime.fromisoformat(expires_at)
                 restante = exp - datetime.datetime.now()
                 minutos = int(restante.total_seconds() // 60)
-                embed.add_field(
-                    name="Tiempo restante",
-                    value=f"{minutos} minutos",
-                    inline=False
-                )
+                embed.add_field(name="Tiempo restante", value=f"{minutos} minutos", inline=False)
             except:
                 pass
 
-        # Datos normales del panel
+        # Datos normales
         embed.add_field(name="<:wifi:1493976408865898568> Ping", value=f"{ping} ms", inline=True)
         embed.add_field(name="<:discord:1483506738954244258> Servidores", value=str(servers), inline=True)
         embed.add_field(name="<:cronometro:1493972193598509056> Uptime", value=uptime, inline=False)
 
         embed.add_field(
-            name="RAM",
+            name="<:nose:1491491155198607440> RAM",
             value=f"{barra(ram_percent)} {ram_used_mb} MB / {MAX_RAM_MB} MB",
             inline=False
         )
 
         embed.add_field(
-            name="Disco",
+            name="<:candado:1491537429889552514> Disco",
             value=f"{barra(disk_percent)} {disk_used_mb} MB / {MAX_DISK_MB} MB",
             inline=False
         )
 
         embed.add_field(
-            name="CPU",
+            name="<:ruedita:1491491111557140570> CPU",
             value=f"{barra(cpu_bar_percent)} {cpu_percent}% / {MAX_CPU_PERCENT}%",
             inline=False
         )
@@ -225,4 +213,4 @@ class StatusPanel(commands.Cog):
         await self.bot.wait_until_ready()
 
 async def setup(bot):
-    await bot.add_cog(StatusPanel(bot))
+    await bot.add_cog(StatusPanel(bot)) 
