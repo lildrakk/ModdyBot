@@ -10,9 +10,6 @@ BOT_VERSION = "v1.2"
 
 load_dotenv()
 
-# ============================================================
-# SISTEMA DE VERSIONES
-# ============================================================
 
 def version_permitida(user_id: int):
     versions = load_versions()
@@ -27,19 +24,15 @@ VERSION_NEW = {
         "logs", "moderacion", "securityscan", "utilidad",
         "verification", "version", "welcome_dm", "help"
     ],
-
-    "v1.1": [
-        "antialts", "blacklistglobal", "blacklistserver"
-    ],
-
+    "v1.1": ["antialts", "blacklistglobal", "blacklistserver"],
     "v1.2": [
         "antiping", "statuspanel", "giveaways", "premium",
-        "backups", "premiumcdms", "embed", "perfil",
-        "lock"
+        "backups", "premiumcdms", "embed", "perfil", "lock"
     ]
 }
 
 VERSION_REMOVED = {}
+
 
 def get_modules_for_version(version):
     versions = list(VERSION_NEW.keys())
@@ -55,24 +48,16 @@ def get_modules_for_version(version):
     return modules
 
 
-# ============================================================
-# BOT
-# ============================================================
-
 class Bot(commands.Bot):
     def __init__(self):
-        super().__init__(
-            command_prefix=";",
-            intents=discord.Intents.all()
-        )
+        super().__init__(command_prefix=";", intents=discord.Intents.all())
 
     async def setup_hook(self):
-        # 🔥 Cargar PRIMERO el COG de mantenimiento
+        # 🔥 Cargar primero el COG de mantenimiento
         await self.load_extension("cogs.mantenimiento")
 
         versions = load_versions()
         owner_version = versions["dev"]
-
         modules = get_modules_for_version(owner_version)
 
         for module in modules:
@@ -91,10 +76,6 @@ class Bot(commands.Bot):
 
 bot = Bot()
 
-
-# ============================================================
-# EVENTOS
-# ============================================================
 
 @bot.event
 async def on_ready():
