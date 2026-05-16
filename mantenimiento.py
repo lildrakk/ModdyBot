@@ -6,14 +6,11 @@ import os
 
 MAINTENANCE_FILE = "maintenance.json"
 
-# ✅ Whitelist de administradores que pueden usar /mantenimiento
 ADMIN_WHITELIST = [1394342273919225959]
-# ✅ Whitelist de usuarios que pueden usar comandos durante mantenimiento (vacío)
 USER_WHITELIST = []
 
 
 def load_maintenance():
-    # Si no existe el JSON, se crea automáticamente
     if not os.path.exists(MAINTENANCE_FILE):
         data = {"active": False, "reason": None, "expires_at": None}
         with open(MAINTENANCE_FILE, "w", encoding="utf-8") as f:
@@ -36,44 +33,30 @@ class Mantenimiento(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    # ============================================================
-    # 🔥 BLOQUEO GLOBAL (ANTES DE EJECUTAR CUALQUIER COMANDO)
-    # ============================================================
+        # ✅ Registrar el check global aquí
+        async def global_before_command(interaction: discord.Interaction):
+            data = load_maintenance()
 
-    @commands.Cog.listener("on_interaction")
-    async def mantenimiento_block(self, interaction: discord.Interaction):
-        data = load_maintenance()
+            if not data.get("active"):
+                return True
 
-        # Si no hay mantenimiento → permitir
-        if not data.get("active"):
-            return
+            if interaction.user.id in USER_WHITELIST:
+                return True
 
-        # Whitelist total
-        if interaction.user.id in USER_WHITELIST:
-            return
-
-        # Permitir admins usar /mantenimiento
-        if interaction.type == discord.InteractionType.application_command:
-            if interaction.command.name == "mantenimiento":
+            if interaction.command and interaction.command.name == "mantenimiento":
                 if interaction.user.id in ADMIN_WHITELIST:
-                    return
+                    return True
 
-        # Preparar embed de aviso
-        embed = discord.Embed(
-            title="🛠️ Mantenimiento activo",
-            description="ModdyBot está realizando tareas internas.",
-            color=discord.Color.orange()
-        )
+            embed = discord.Embed(
+                title="🛠️ Mantenimiento activo",
+                description="ModdyBot está realizando tareas internas.",
+                color=discord.Color.orange()
+            )
 
-        # Si el comando ya respondió, no enviar nada más
-        try:
-            if not interaction.response.is_done():
-                await interaction.response.send_message(embed=embed, ephemeral=True)
-        except Exception:
-            pass
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return False  # 🔥 Esto sí bloquea el comando
 
-        # Detener ejecución del comando
-        raise Exception("Bloqueado por mantenimiento")
+        bot.tree.interaction_check = global_before_command
 
     # ============================================================
     # 🔥 COMANDO /mantenimiento
@@ -113,4 +96,4 @@ class Mantenimiento(commands.Cog):
 
 
 async def setup(bot):
-    await bot.add_cog(Mantenimiento(bot)) 
+    await bot.add_cog(Mantenimiento(bot))
