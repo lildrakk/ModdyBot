@@ -67,7 +67,6 @@ class Bot(commands.Bot):
         )
 
     async def setup_hook(self):
-
         # 🔥 Cargar PRIMERO el COG de mantenimiento
         await self.load_extension("cogs.mantenimiento")
 
