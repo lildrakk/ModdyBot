@@ -112,14 +112,12 @@ def get_modules_for_version(version):
 # =============================================
 class Bot(commands.Bot):
     def __init__(self):
-        intents = discord.Intents.all()
-        super().__init__(command_prefix=";", intents=intents)
+        super().__init__(command_prefix=";", intents=discord.Intents.all())
 
     async def update_status(self):
-        guild_count = len(self.guilds)
-        text = f"¡/help para comenzar! | protegiendo a {guild_count} servidores"
         await self.change_presence(
-            activity=discord.Game(name=text)
+            status=discord.Status.online,
+            activity=discord.Game(name=f"/help para comenzar | {len(self.guilds)} servidores")
         )
 
     async def setup_hook(self):
@@ -149,7 +147,9 @@ bot = Bot()
 @bot.event
 async def on_ready():
     print(f"🤖 Bot conectado como {bot.user}")
-    bot.add_view(GiveawayView(giveaway_id=None))
+    if not getattr(bot, "_giveaway_view_added", False):
+        bot.add_view(GiveawayView(giveaway_id=None))
+        bot._giveaway_view_added = True
     await bot.update_status()
     update_bot_stats(bot)
 
